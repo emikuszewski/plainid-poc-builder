@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0a0a0a;
+  --color-bg-elevated: #111111;
+  --color-bg-hover: #161616;
+  --color-bg-input: #0d0d0d;
+  --color-border: #1f1f1f;
+  --color-border-strong: #2a2a2a;
+  --color-border-focus: #404040;
+  --color-text: #f5f5f5;
+  --color-text-muted: #a3a3a3;
+  --color-text-dim: #525252;
+  --color-text-faint: #303030;
+  --color-accent: #5eead4;
+  --color-accent-hover: #2dd4bf;
+  --color-accent-dim: #134e4a;
+  --color-danger: #f87171;
+  --color-warning: #fbbf24;
+  --color-success: #5eead4;
+
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Geist font loading */
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/Geist-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/Geist-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/Geist-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/Geist-Bold.woff2") format("woff2");
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "ss02";
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 4px;
+  border: 2px solid var(--color-bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-focus);
+}
+
+/* Form base styles */
+input[type="text"],
+input[type="email"],
+input[type="url"],
+input[type="date"],
+textarea,
+select {
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  width: 100%;
+  outline: none;
+  transition: border-color 120ms ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="url"]:focus,
+input[type="date"]:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--color-border-focus);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-faint);
+}
+
+textarea {
+  font-family: inherit;
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.55;
+}
+
+label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+}
+
+/* Utility classes */
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "calt" 0;
+}
+
+/* Amplify Authenticator overrides for our dark theme */
+[data-amplify-authenticator] {
+  --amplify-colors-background-primary: var(--color-bg);
+  --amplify-colors-background-secondary: var(--color-bg-elevated);
+  --amplify-colors-border-primary: var(--color-border);
+  --amplify-colors-brand-primary-10: var(--color-accent-dim);
+  --amplify-colors-brand-primary-80: var(--color-accent);
+  --amplify-colors-brand-primary-90: var(--color-accent-hover);
+  --amplify-colors-brand-primary-100: var(--color-accent-hover);
+  --amplify-colors-font-primary: var(--color-text);
+  --amplify-colors-font-secondary: var(--color-text-muted);
+  --amplify-colors-font-interactive: var(--color-accent);
+  --amplify-components-button-primary-background-color: var(--color-accent);
+  --amplify-components-button-primary-color: var(--color-bg);
+  --amplify-components-fieldcontrol-color: var(--color-text);
+  --amplify-components-fieldcontrol-background-color: var(--color-bg-input);
+  --amplify-components-fieldcontrol-border-color: var(--color-border);
+  --amplify-components-tabs-item-color: var(--color-text-muted);
+  --amplify-components-tabs-item-active-color: var(--color-accent);
+  --amplify-components-tabs-item-active-border-color: var(--color-accent);
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
