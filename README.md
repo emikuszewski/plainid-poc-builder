@@ -2,7 +2,7 @@
 
 Internal SE tool for authoring standardized PlainID POC documents. Single-page sectioned
 form with completeness indicators, a shared use case library, live HTML preview, and
-DOCX export. Built on AWS Amplify Gen 2 (Cognito + DynamoDB via AppSync).
+DOCX export. Built on AWS Amplify Gen 2 (Cognito + DynamoDB via AppSync)
 
 - **Auth:** Cognito, restricted to `@plainid.com` via a pre-sign-up Lambda
 - **Data:** Two DynamoDB tables (`Poc`, `UseCaseLibraryEntry`) provisioned by Amplify Data
