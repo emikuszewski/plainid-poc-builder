@@ -90,7 +90,7 @@ export function PocList({ currentUserEmail }: { currentUserEmail: string }) {
       {filtered && filtered.length === 0 && (
         <EmptyState
           title={filter === 'mine' ? "You haven't started a POC yet" : 'No POCs yet'}
-          description="Start a new POC to lock down scope, success criteria, and the qualification pieces a Fifth-Third-style skeleton would skip."
+          description="Start a new POC to lock down scope, success criteria, and the qualification details that make for a well-defined engagement."
           action={
             <Button variant="primary" onClick={() => nav('/poc/new')}>
               + New POC
