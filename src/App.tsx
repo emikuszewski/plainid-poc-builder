@@ -61,7 +61,7 @@ function AppRoutes({ user }: { user: { email: string } }) {
         <Route path="/poc/new" element={<PocEditor currentUserEmail={user.email} />} />
         <Route path="/poc/:id" element={<PocEditor currentUserEmail={user.email} />} />
         <Route path="/poc/:id/preview" element={<PocPreview />} />
-        <Route path="/library" element={<UseCaseLibrary />} />
+        <Route path="/library" element={<UseCaseLibrary currentUserEmail={user.email} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
