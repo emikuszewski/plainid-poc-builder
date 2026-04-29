@@ -9,9 +9,10 @@ import { PocPreview } from './components/PocPreview';
 import { UseCaseLibrary } from './components/UseCaseLibrary';
 import { listLibrary, createLibraryEntry } from './lib/client';
 import { SEED_USE_CASES } from './lib/seed-data';
+import { useTheme } from './lib/theme';
 
-const theme = {
-  name: 'plainid-dark',
+const amplifyTheme = {
+  name: 'plainid',
   overrides: [defaultDarkModeOverride],
 };
 
@@ -68,8 +69,9 @@ function AppRoutes({ user }: { user: { email: string } }) {
 }
 
 export default function App() {
+  const { theme } = useTheme();
   return (
-    <ThemeProvider theme={theme} colorMode="dark">
+    <ThemeProvider theme={amplifyTheme} colorMode={theme}>
       <Authenticator
         signUpAttributes={['email']}
         components={{
@@ -81,7 +83,7 @@ export default function App() {
                     fontFamily: 'JetBrains Mono, monospace',
                     fontSize: 11,
                     letterSpacing: '0.18em',
-                    color: '#a3a3a3',
+                    color: 'var(--color-text-muted)',
                   }}
                 >
                   PLAINID · POC BUILDER
@@ -89,7 +91,7 @@ export default function App() {
                 <div
                   style={{
                     fontSize: 12,
-                    color: '#525252',
+                    color: 'var(--color-text-dim)',
                     marginTop: 6,
                     fontFamily: 'JetBrains Mono, monospace',
                   }}
