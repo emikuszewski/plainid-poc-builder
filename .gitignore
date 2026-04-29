@@ -34,3 +34,7 @@ yarn-error.log*
 
 # Misc
 *.tsbuildinfo
+
+# tsc -b artifacts (vite config compiled output)
+vite.config.d.ts
+vite.config.js
