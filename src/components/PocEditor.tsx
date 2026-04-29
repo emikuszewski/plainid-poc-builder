@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Modal, Pill, Field } from './ui/Primitives';
 import {
   CustomerSection,
@@ -35,6 +35,8 @@ type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const seedUseCaseId = searchParams.get('useCase');
   const nav = useNavigate();
   const isNew = !id;
 
@@ -79,6 +81,38 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
       }
     })();
   }, []);
+
+  // If the new POC was launched from a library card (URL has ?useCase=<id>),
+  // pre-load that use case into the empty POC. Runs once when both poc and
+  // library are ready, then strips the query param so it doesn't re-fire.
+  useEffect(() => {
+    if (!isNew || !poc || poc.useCases.length > 0 || !seedUseCaseId || library.length === 0) return;
+    const entry = library.find((e) => e.id === seedUseCaseId);
+    if (!entry) {
+      // Library entry was deleted between picker click and editor load — silent fail
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    setPoc((prev) =>
+      prev
+        ? {
+            ...prev,
+            useCases: [
+              {
+                id: uid(),
+                libraryId: entry.id ?? null,
+                title: entry.title,
+                category: entry.category,
+                persona: entry.persona,
+                objectives: entry.objectives,
+                successCriteria: entry.successCriteria,
+              },
+            ],
+          }
+        : prev,
+    );
+    setSearchParams({}, { replace: true });
+  }, [isNew, poc, library, seedUseCaseId, setSearchParams]);
 
   // Autosave on dirty
   useEffect(() => {
