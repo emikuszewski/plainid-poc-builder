@@ -121,7 +121,7 @@ export function UseCaseLibrary() {
       </div>
 
       {error && (
-        <div className="bg-[#2a1414] border border-[#4a2222] text-[var(--color-danger)] text-[12px] px-4 py-2 rounded mb-4">
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] text-[var(--color-danger)] text-[12px] px-4 py-2 rounded mb-4">
           {error}
         </div>
       )}

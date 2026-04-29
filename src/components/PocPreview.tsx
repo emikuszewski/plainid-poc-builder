@@ -31,7 +31,7 @@ export function PocPreview() {
   if (error) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-12">
-        <div className="bg-[#2a1414] border border-[#4a2222] text-[var(--color-danger)] px-4 py-3 rounded">
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] text-[var(--color-danger)] px-4 py-3 rounded">
           {error}
         </div>
         <Button className="mt-4" onClick={() => nav('/')}>

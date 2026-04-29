@@ -29,7 +29,7 @@ export function Button({
     ghost:
       'bg-transparent text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text)] hover:bg-[var(--color-bg-elevated)]',
     danger:
-      'bg-transparent text-[var(--color-danger)] border-[var(--color-border)] hover:bg-[#2a1414] hover:border-[var(--color-danger)]',
+      'bg-transparent text-[var(--color-danger)] border-[var(--color-border)] hover:bg-[var(--color-pill-danger-bg)] hover:border-[var(--color-danger)]',
   };
   return (
     <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...rest}>
@@ -128,9 +128,9 @@ export function Pill({
 }) {
   const tones = {
     neutral: 'bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)] border-[var(--color-border)]',
-    accent: 'bg-[#0e2826] text-[var(--color-accent)] border-[#1f4a44]',
-    warning: 'bg-[#2a1f00] text-[var(--color-warning)] border-[#4a3a00]',
-    danger: 'bg-[#2a1414] text-[var(--color-danger)] border-[#4a2222]',
+    accent: 'bg-[var(--color-pill-accent-bg)] text-[var(--color-accent)] border-[var(--color-pill-accent-border)]',
+    warning: 'bg-[var(--color-pill-warning-bg)] text-[var(--color-warning)] border-[var(--color-pill-warning-border)]',
+    danger: 'bg-[var(--color-pill-danger-bg)] text-[var(--color-danger)] border-[var(--color-pill-danger-border)]',
   };
   return (
     <span

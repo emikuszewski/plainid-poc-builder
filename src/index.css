@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * Theme tokens. Tailwind v4 reads --color-* / --font-* from @theme at build time
+ * to generate utility classes. The runtime values come from the [data-theme]
+ * blocks below — we override them on :root so utility classes that reference
+ * var(--color-...) flip at runtime.
+ *
+ * Defaults here = dark theme (the ship-it-by-default look).
+ */
 @theme {
   --color-bg: #0a0a0a;
   --color-bg-elevated: #111111;
@@ -19,8 +27,73 @@
   --color-warning: #fbbf24;
   --color-success: #5eead4;
 
+  /* Tone-mapped surfaces used in a couple of places that need explicit hex
+   * (Pill backgrounds, Authenticator overrides). Theme-aware via the cascade. */
+  --color-pill-accent-bg: #0e2826;
+  --color-pill-accent-border: #1f4a44;
+  --color-pill-warning-bg: #2a1f00;
+  --color-pill-warning-border: #4a3a00;
+  --color-pill-danger-bg: #2a1414;
+  --color-pill-danger-border: #4a2222;
+
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Dark (default) — explicit so toggling between themes is a clean swap */
+:root,
+[data-theme="dark"] {
+  --color-bg: #0a0a0a;
+  --color-bg-elevated: #111111;
+  --color-bg-hover: #161616;
+  --color-bg-input: #0d0d0d;
+  --color-border: #1f1f1f;
+  --color-border-strong: #2a2a2a;
+  --color-border-focus: #404040;
+  --color-text: #f5f5f5;
+  --color-text-muted: #a3a3a3;
+  --color-text-dim: #525252;
+  --color-text-faint: #303030;
+  --color-accent: #5eead4;
+  --color-accent-hover: #2dd4bf;
+  --color-accent-dim: #134e4a;
+  --color-danger: #f87171;
+  --color-warning: #fbbf24;
+  --color-pill-accent-bg: #0e2826;
+  --color-pill-accent-border: #1f4a44;
+  --color-pill-warning-bg: #2a1f00;
+  --color-pill-warning-border: #4a3a00;
+  --color-pill-danger-bg: #2a1414;
+  --color-pill-danger-border: #4a2222;
+  color-scheme: dark;
+}
+
+/* Light theme — same shape, inverted lightness, accent shifted slightly darker
+ * so it has enough contrast against white backgrounds. */
+[data-theme="light"] {
+  --color-bg: #ffffff;
+  --color-bg-elevated: #fafafa;
+  --color-bg-hover: #f4f4f4;
+  --color-bg-input: #ffffff;
+  --color-border: #e5e5e5;
+  --color-border-strong: #d4d4d4;
+  --color-border-focus: #a3a3a3;
+  --color-text: #0a0a0a;
+  --color-text-muted: #525252;
+  --color-text-dim: #737373;
+  --color-text-faint: #a3a3a3;
+  --color-accent: #0d8a72;
+  --color-accent-hover: #0a6f5c;
+  --color-accent-dim: #ccfbf1;
+  --color-danger: #dc2626;
+  --color-warning: #b45309;
+  --color-pill-accent-bg: #ecfdf5;
+  --color-pill-accent-border: #99f6e4;
+  --color-pill-warning-bg: #fef3c7;
+  --color-pill-warning-border: #fde68a;
+  --color-pill-danger-bg: #fee2e2;
+  --color-pill-danger-border: #fecaca;
+  color-scheme: light;
 }
 
 /* Geist font loading */
