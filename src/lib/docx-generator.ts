@@ -15,7 +15,17 @@ import {
   LevelFormat,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import type { PocDocument } from '../types';
+import type {
+  PocDocument,
+  UnknownableField,
+  UrlEntry,
+  UseCase,
+} from '../types';
+import {
+  CATEGORY_HAS_TECH_BLOCK,
+  DOWNSTREAM_AUTHORIZER_CATEGORIES,
+  findAuthorizer,
+} from '../types';
 
 const lines = (s: string | undefined | null) =>
   String(s ?? '')
@@ -217,86 +227,6 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
     children.push(...bulletList(lines(poc.architectureConstraints)));
   }
 
-  // === Timeline ===
-  children.push(heading('POC Timeline', HeadingLevel.HEADING_1));
-  for (const line of String(poc.timelineSummary || '').split(/\n\s*\n/).filter(Boolean)) {
-    children.push(para(line.trim(), { size: 22 }));
-  }
-  if (poc.sprints.length) {
-    const colW = [2080, 2080, 5200];
-    const rows = [
-      new TableRow({
-        children: [
-          cell('Phase', { width: colW[0], bold: true, bg: 'F4F4F4' }),
-          cell('Weeks', { width: colW[1], bold: true, bg: 'F4F4F4' }),
-          cell('Focus', { width: colW[2], bold: true, bg: 'F4F4F4' }),
-        ],
-      }),
-      ...poc.sprints.map(
-        (s) =>
-          new TableRow({
-            children: [
-              cell(s.phase, { width: colW[0], bold: true }),
-              cell(s.weeks, { width: colW[1] }),
-              cell(s.focus, { width: colW[2] }),
-            ],
-          }),
-      ),
-    ];
-    children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: colW, rows }));
-  }
-
-  // === Framework ===
-  children.push(heading('POC Framework', HeadingLevel.HEADING_1));
-  children.push(heading('Collaboration Model', HeadingLevel.HEADING_2));
-  for (const line of String(poc.cadence || '').split(/\n\s*\n/).filter(Boolean)) {
-    children.push(para(line.trim(), { size: 22 }));
-  }
-
-  if (poc.personas.length) {
-    children.push(heading('Test Personas', HeadingLevel.HEADING_2));
-    children.push(
-      ...poc.personas.map(
-        (p) =>
-          new Paragraph({
-            numbering: { reference: 'bullets', level: 0 },
-            spacing: { before: 40, after: 40 },
-            children: [
-              new TextRun({ text: `${p.name} — `, bold: true, size: 22, font: 'Calibri' }),
-              new TextRun({ text: p.description, size: 22, font: 'Calibri' }),
-            ],
-          }),
-      ),
-    );
-  }
-
-  if (poc.teamMembers.length) {
-    children.push(heading('POC Team Members & Responsibilities', HeadingLevel.HEADING_2));
-    const colW = [1872, 2496, 2496, 2496];
-    const rows = [
-      new TableRow({
-        children: [
-          cell('Org', { width: colW[0], bold: true, bg: 'F4F4F4' }),
-          cell('Name', { width: colW[1], bold: true, bg: 'F4F4F4' }),
-          cell('Role', { width: colW[2], bold: true, bg: 'F4F4F4' }),
-          cell('Contact', { width: colW[3], bold: true, bg: 'F4F4F4' }),
-        ],
-      }),
-      ...poc.teamMembers.map(
-        (m) =>
-          new TableRow({
-            children: [
-              cell(m.org, { width: colW[0] }),
-              cell(m.name, { width: colW[1], bold: true }),
-              cell(m.role, { width: colW[2] }),
-              cell(m.email, { width: colW[3] }),
-            ],
-          }),
-      ),
-    ];
-    children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: colW, rows }));
-  }
-
   // === Use Cases ===
   children.push(heading('Use Cases & Success Criteria', HeadingLevel.HEADING_1));
   children.push(
@@ -385,6 +315,103 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
     );
     children.push(para('', { size: 12 })); // breather
   });
+
+  // === Technical Foundation ===
+  children.push(heading('Technical Foundation', HeadingLevel.HEADING_1));
+  children.push(
+    para(
+      'Authorizer selection and the technical specifics PlainID needs to map identity, build policies, and integrate with target systems. Each use case is shown with its own authorizer config and category-specific block.',
+      { size: 22 },
+    ),
+  );
+  const techUseCases = poc.useCases.filter((u) => CATEGORY_HAS_TECH_BLOCK[u.category]);
+  if (techUseCases.length === 0) {
+    children.push(para('No technical-spec use cases defined.', { size: 22 }));
+  } else {
+    techUseCases.forEach((u, i) => {
+      pushTechBlockForUseCase(children, u, i, poc.useCases);
+    });
+  }
+
+  // === Timeline ===
+  children.push(heading('POC Timeline', HeadingLevel.HEADING_1));
+  for (const line of String(poc.timelineSummary || '').split(/\n\s*\n/).filter(Boolean)) {
+    children.push(para(line.trim(), { size: 22 }));
+  }
+  if (poc.sprints.length) {
+    const colW = [2080, 2080, 5200];
+    const rows = [
+      new TableRow({
+        children: [
+          cell('Phase', { width: colW[0], bold: true, bg: 'F4F4F4' }),
+          cell('Weeks', { width: colW[1], bold: true, bg: 'F4F4F4' }),
+          cell('Focus', { width: colW[2], bold: true, bg: 'F4F4F4' }),
+        ],
+      }),
+      ...poc.sprints.map(
+        (s) =>
+          new TableRow({
+            children: [
+              cell(s.phase, { width: colW[0], bold: true }),
+              cell(s.weeks, { width: colW[1] }),
+              cell(s.focus, { width: colW[2] }),
+            ],
+          }),
+      ),
+    ];
+    children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: colW, rows }));
+  }
+
+  // === Framework ===
+  children.push(heading('POC Framework', HeadingLevel.HEADING_1));
+  children.push(heading('Collaboration Model', HeadingLevel.HEADING_2));
+  for (const line of String(poc.cadence || '').split(/\n\s*\n/).filter(Boolean)) {
+    children.push(para(line.trim(), { size: 22 }));
+  }
+
+  if (poc.personas.length) {
+    children.push(heading('Test Personas', HeadingLevel.HEADING_2));
+    children.push(
+      ...poc.personas.map(
+        (p) =>
+          new Paragraph({
+            numbering: { reference: 'bullets', level: 0 },
+            spacing: { before: 40, after: 40 },
+            children: [
+              new TextRun({ text: `${p.name} — `, bold: true, size: 22, font: 'Calibri' }),
+              new TextRun({ text: p.description, size: 22, font: 'Calibri' }),
+            ],
+          }),
+      ),
+    );
+  }
+
+  if (poc.teamMembers.length) {
+    children.push(heading('POC Team Members & Responsibilities', HeadingLevel.HEADING_2));
+    const colW = [1872, 2496, 2496, 2496];
+    const rows = [
+      new TableRow({
+        children: [
+          cell('Org', { width: colW[0], bold: true, bg: 'F4F4F4' }),
+          cell('Name', { width: colW[1], bold: true, bg: 'F4F4F4' }),
+          cell('Role', { width: colW[2], bold: true, bg: 'F4F4F4' }),
+          cell('Contact', { width: colW[3], bold: true, bg: 'F4F4F4' }),
+        ],
+      }),
+      ...poc.teamMembers.map(
+        (m) =>
+          new TableRow({
+            children: [
+              cell(m.org, { width: colW[0] }),
+              cell(m.name, { width: colW[1], bold: true }),
+              cell(m.role, { width: colW[2] }),
+              cell(m.email, { width: colW[3] }),
+            ],
+          }),
+      ),
+    ];
+    children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: colW, rows }));
+  }
 
   // === Dependencies ===
   children.push(heading('POC Dependencies & Pre-Requisites', HeadingLevel.HEADING_1));
@@ -519,6 +546,323 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
   });
 
   return await Packer.toBlob(doc);
+}
+
+// ============================================================
+// Technical Foundation: per-use-case rendering helper
+// ============================================================
+
+const ufText = (f: UnknownableField | undefined): string => {
+  if (!f) return '—';
+  if (f.unknown) return 'TBD — to be resolved during POC';
+  return f.value || '—';
+};
+
+function ufParagraphs(f: UnknownableField | undefined): Paragraph[] {
+  if (!f) {
+    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+  }
+  if (f.unknown) {
+    return [
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: 'TBD — to be resolved during POC',
+            size: 20,
+            font: 'Calibri',
+            color: '92400E',
+            italics: true,
+          }),
+        ],
+      }),
+    ];
+  }
+  const items = lines(f.value);
+  if (items.length === 0) {
+    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+  }
+  if (items.length === 1) {
+    return [
+      new Paragraph({
+        children: [new TextRun({ text: items[0], size: 20, font: 'Calibri' })],
+      }),
+    ];
+  }
+  return items.map(
+    (l) =>
+      new Paragraph({
+        numbering: { reference: 'bullets', level: 0 },
+        spacing: { before: 30, after: 30 },
+        children: [new TextRun({ text: l, size: 20, font: 'Calibri' })],
+      }),
+  );
+}
+
+function urlEntriesParagraphs(entries: UrlEntry[] | undefined): Paragraph[] {
+  if (!entries || entries.length === 0) {
+    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+  }
+  return entries.map(
+    (e) =>
+      new Paragraph({
+        numbering: { reference: 'bullets', level: 0 },
+        spacing: { before: 30, after: 30 },
+        children: [
+          new TextRun({ text: `${e.label || 'URL'} — `, bold: true, size: 20, font: 'Calibri' }),
+          new TextRun({ text: e.url, size: 20, font: 'Calibri', color: '0D8A72' }),
+          ...(e.notes
+            ? [new TextRun({ text: ` — ${e.notes}`, size: 20, font: 'Calibri', italics: true })]
+            : []),
+        ],
+      }),
+  );
+}
+
+// Render a single labeled row in a tech-spec table
+function specRow(label: string, value: string | Paragraph[]): TableRow {
+  const labelW = 2340;
+  const valueW = 7020;
+  return new TableRow({
+    children: [
+      cell(label, { width: labelW, bold: true, bg: 'FAFAFA' }),
+      cell(value, { width: valueW }),
+    ],
+  });
+}
+
+// Render a section title row spanning both columns
+function specTitleRow(text: string): TableRow {
+  return new TableRow({
+    children: [
+      new TableCell({
+        borders,
+        width: { size: 9360, type: WidthType.DXA },
+        columnSpan: 2,
+        shading: { fill: '0A0A0A', type: ShadingType.CLEAR },
+        margins: { top: 100, bottom: 100, left: 140, right: 140 },
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({ text, bold: true, color: 'FFFFFF', size: 22, font: 'Calibri' }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+function pushTable(children: any[], rows: TableRow[]) {
+  children.push(
+    new Table({
+      width: { size: 9360, type: WidthType.DXA },
+      columnWidths: [2340, 7020],
+      rows,
+    }),
+  );
+  children.push(para('', { size: 10 })); // small breather
+}
+
+function pushTechBlockForUseCase(
+  children: any[],
+  u: UseCase,
+  idx: number,
+  allUseCases: UseCase[],
+) {
+  const spec = u.technicalSpec;
+  if (!spec) return;
+
+  const isDownstream = DOWNSTREAM_AUTHORIZER_CATEGORIES.includes(u.category);
+
+  // Per-use-case header
+  children.push(
+    new Paragraph({
+      spacing: { before: 240, after: 80 },
+      children: [
+        new TextRun({
+          text: `UC${String(idx + 1).padStart(2, '0')} · ${u.title || '(untitled)'}`,
+          bold: true,
+          size: 24,
+          font: 'Calibri',
+        }),
+        new TextRun({
+          text: `   ${u.category.toUpperCase()}`,
+          size: 18,
+          font: 'Calibri',
+          color: '0D8A72',
+          bold: true,
+          characterSpacing: 30,
+        }),
+      ],
+    }),
+  );
+
+  // ----- Authorizer block (skip for Identity / Compliance) -----
+  if (!isDownstream) {
+    const a = spec.authorizer;
+    const catalogEntry = findAuthorizer(a.selectedAuthorizerId);
+    const authorizerName =
+      a.selectedAuthorizerId === 'custom'
+        ? a.customAuthorizerName.unknown
+          ? 'TBD'
+          : a.customAuthorizerName.value || 'Custom (unnamed)'
+        : catalogEntry?.name ?? a.selectedAuthorizerId;
+
+    const rows: TableRow[] = [specTitleRow(`Authorizer · ${authorizerName}`)];
+    if (catalogEntry) {
+      rows.push(
+        specRow('Description', [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: catalogEntry.shortDescription,
+                italics: true,
+                size: 20,
+                font: 'Calibri',
+              }),
+            ],
+          }),
+        ]),
+      );
+    }
+    rows.push(specRow('Version', ufText(a.version)));
+    rows.push(specRow('Enforcement Mode', ufText(a.enforcementMode)));
+    rows.push(specRow('Deployment Topology', ufText(a.deploymentTopology)));
+    rows.push(specRow('Deployment Target', ufText(a.deploymentTarget)));
+    rows.push(specRow('PDP Endpoint', ufText(a.pdpEndpoint)));
+    rows.push(specRow('Network Path', ufText(a.networkPath)));
+    rows.push(specRow('Identity Source Paths', ufParagraphs(a.identitySourcePaths)));
+    rows.push(specRow('Required PIP Integrations', ufParagraphs(a.requiredPipIntegrations)));
+    rows.push(specRow('Credentials Location', ufText(a.credentialsLocation)));
+    rows.push(specRow('Credentials Provisioner', ufText(a.credentialsProvisioner)));
+    rows.push(specRow('Failure Mode', ufText(a.failureMode)));
+    rows.push(specRow('Performance Budget', ufText(a.performanceBudget)));
+    rows.push(specRow('Sample Request / Response', ufParagraphs(a.sampleRequestResponse)));
+    rows.push(specRow('Authorizer Documentation', urlEntriesParagraphs(a.authorizerDocs)));
+    rows.push(specRow('Open Items', ufParagraphs(a.openItems)));
+    pushTable(children, rows);
+  }
+
+  // ----- Universal block -----
+  {
+    const rows: TableRow[] = [specTitleRow('Universal — Identity & Test Users')];
+    rows.push(specRow('JWT / OIDC Samples', urlEntriesParagraphs(spec.jwtSampleUrls)));
+    rows.push(specRow('Identity Attribute Catalog', ufParagraphs(spec.identityAttributeCatalog)));
+    rows.push(specRow('Test User Accounts', ufParagraphs(spec.testUserAccounts)));
+    pushTable(children, rows);
+  }
+
+  // ----- Per-category block -----
+  if (u.category === 'Data' && spec.data) {
+    const d = spec.data;
+    const rows: TableRow[] = [specTitleRow('Data Layer Specifics')];
+    rows.push(specRow('Catalog Scope', ufParagraphs(d.catalogScope)));
+    rows.push(specRow('Classification Taxonomy', ufParagraphs(d.classificationTaxonomy)));
+    rows.push(specRow('Classification Docs', urlEntriesParagraphs(d.classificationDocsUrls)));
+    rows.push(specRow('Sample Queries', ufParagraphs(d.sampleQueries)));
+    rows.push(specRow('Connection Method', ufParagraphs(d.connectionMethod)));
+    rows.push(specRow('Existing Access Control', ufParagraphs(d.existingAccessControl)));
+    rows.push(specRow('Performance Baseline', ufText(d.performanceBaseline)));
+    rows.push(specRow('Data Residency Constraints', ufParagraphs(d.dataResidencyConstraints)));
+    pushTable(children, rows);
+  } else if (u.category === 'API Gateway' && spec.apiGateway) {
+    const g = spec.apiGateway;
+    const rows: TableRow[] = [specTitleRow('API Gateway Specifics')];
+    rows.push(specRow('API Specifications', urlEntriesParagraphs(g.apiCatalogUrls)));
+    rows.push(specRow('Endpoint Resource Model', ufParagraphs(g.endpointResourceModel)));
+    rows.push(specRow('Auth Pattern Today', ufParagraphs(g.authPatternToday)));
+    rows.push(specRow('Token Flow', ufParagraphs(g.tokenFlow)));
+    rows.push(specRow('Gateway Version', ufText(g.gatewayVersion)));
+    rows.push(specRow('Existing Gateway Policies', ufParagraphs(g.existingPolicies)));
+    rows.push(specRow('Backend Trust Model', ufText(g.backendTrustModel)));
+    rows.push(specRow('Latency SLA', ufText(g.latencySla)));
+    pushTable(children, rows);
+  } else if (u.category === 'AI Authorization' && spec.aiAuth) {
+    const ai = spec.aiAuth;
+    const rows: TableRow[] = [specTitleRow('AI Authorization Specifics')];
+    rows.push(specRow('Agent Topology', ufParagraphs(ai.agentTopology)));
+    rows.push(specRow('Tool Inventory Specs', urlEntriesParagraphs(ai.toolInventoryUrls)));
+    rows.push(specRow('Tool Inventory Notes', ufParagraphs(ai.toolInventoryNotes)));
+    rows.push(specRow('Calling Identity Propagation', ufParagraphs(ai.callingIdentityPropagation)));
+    rows.push(specRow('RAG Sources', ufParagraphs(ai.ragSourcesInScope)));
+    rows.push(specRow('Agent Runtime', ufParagraphs(ai.agentRuntime)));
+    rows.push(specRow('MCP Transport', ufText(ai.mcpTransport)));
+    rows.push(specRow('LLM Provider', ufParagraphs(ai.llmProvider)));
+    rows.push(specRow('Failure Mode Policy', ufParagraphs(ai.failureModePolicy)));
+    pushTable(children, rows);
+  } else if (u.category === 'Application' && spec.application) {
+    const ap = spec.application;
+    const rows: TableRow[] = [specTitleRow('Application Specifics')];
+    rows.push(specRow('App Architecture', ufParagraphs(ap.appArchitecture)));
+    rows.push(specRow('Resource Model', ufParagraphs(ap.resourceModel)));
+    rows.push(specRow('Existing Authorization', ufParagraphs(ap.existingAuthorization)));
+    rows.push(specRow('Session Model', ufParagraphs(ap.sessionModel)));
+    rows.push(specRow('Build & Deploy', ufParagraphs(ap.buildDeploy)));
+    rows.push(specRow('Domain-Specific Rules', ufParagraphs(ap.domainSpecificRules)));
+    pushTable(children, rows);
+  } else if (u.category === 'Identity' && spec.identity) {
+    const i = spec.identity;
+    const downstream = i.downstreamAuthorizerUseCaseIds
+      .map((id) => allUseCases.find((c) => c.id === id))
+      .filter(Boolean) as UseCase[];
+    const downstreamParagraphs: Paragraph[] = downstream.length
+      ? downstream.map((d) => {
+          const auth = d.technicalSpec
+            ? findAuthorizer(d.technicalSpec.authorizer.selectedAuthorizerId)
+            : undefined;
+          return new Paragraph({
+            numbering: { reference: 'bullets', level: 0 },
+            spacing: { before: 30, after: 30 },
+            children: [
+              new TextRun({ text: d.title || '(untitled)', bold: true, size: 20, font: 'Calibri' }),
+              new TextRun({ text: ` — ${d.category}`, size: 20, font: 'Calibri', italics: true }),
+              ...(auth
+                ? [new TextRun({ text: ` · ${auth.name}`, size: 20, font: 'Calibri' })]
+                : []),
+            ],
+          });
+        })
+      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+    const rows: TableRow[] = [specTitleRow('Identity Specifics')];
+    rows.push(specRow('Downstream Authorizers', downstreamParagraphs));
+    rows.push(specRow('Role Inventory', ufParagraphs(i.roleInventory)));
+    rows.push(specRow('Group Membership Volume', ufParagraphs(i.groupMembershipVolume)));
+    rows.push(specRow('Lifecycle Integration', ufParagraphs(i.lifecycleIntegration)));
+    rows.push(specRow('Source-of-Truth Mapping', ufParagraphs(i.sourceOfTruthMapping)));
+    rows.push(specRow('Federation Boundaries', ufParagraphs(i.federationBoundaries)));
+    pushTable(children, rows);
+  } else if (u.category === 'Compliance' && spec.compliance) {
+    const c = spec.compliance;
+    const downstream = c.downstreamAuthorizerUseCaseIds
+      .map((id) => allUseCases.find((c2) => c2.id === id))
+      .filter(Boolean) as UseCase[];
+    const downstreamParagraphs: Paragraph[] = downstream.length
+      ? downstream.map((d) => {
+          const auth = d.technicalSpec
+            ? findAuthorizer(d.technicalSpec.authorizer.selectedAuthorizerId)
+            : undefined;
+          return new Paragraph({
+            numbering: { reference: 'bullets', level: 0 },
+            spacing: { before: 30, after: 30 },
+            children: [
+              new TextRun({ text: d.title || '(untitled)', bold: true, size: 20, font: 'Calibri' }),
+              new TextRun({ text: ` — ${d.category}`, size: 20, font: 'Calibri', italics: true }),
+              ...(auth
+                ? [new TextRun({ text: ` · ${auth.name}`, size: 20, font: 'Calibri' })]
+                : []),
+            ],
+          });
+        })
+      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+    const rows: TableRow[] = [specTitleRow('Compliance Specifics')];
+    rows.push(specRow('Authorizers Under Audit', downstreamParagraphs));
+    rows.push(specRow('Regulation Set', ufParagraphs(c.regulationSet)));
+    rows.push(specRow('Existing Audit Pipeline', ufParagraphs(c.existingAuditPipeline)));
+    rows.push(specRow('Retention Requirements', ufText(c.retentionRequirements)));
+    rows.push(specRow('Sample Audit Questions', ufParagraphs(c.sampleAuditQuestions)));
+    rows.push(specRow('Reviewer Personas', ufParagraphs(c.reviewerPersonas)));
+    pushTable(children, rows);
+  }
 }
 
 export async function downloadDocx(poc: PocDocument) {

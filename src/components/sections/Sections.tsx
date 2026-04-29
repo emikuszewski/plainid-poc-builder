@@ -13,6 +13,7 @@ import type {
 } from '../../types';
 import { Field, Button, SectionCard, Pill, EmptyState } from '../ui/Primitives';
 import { evaluateSection } from '../../lib/completeness';
+import { emptyTechnicalSpec, reshapeTechnicalSpec } from '../../lib/technical-spec';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -556,11 +557,25 @@ export function UseCasesSection({
           persona: '',
           objectives: '',
           successCriteria: '',
+          technicalSpec: emptyTechnicalSpec('Other'),
         },
       ],
     });
   const update = (id: string, patch: Partial<UseCase>) =>
-    set({ useCases: poc.useCases.map((u) => (u.id === id ? { ...u, ...patch } : u)) });
+    set({
+      useCases: poc.useCases.map((u) => {
+        if (u.id !== id) return u;
+        // If category changed, reshape the technical spec to match
+        if (patch.category && patch.category !== u.category) {
+          return {
+            ...u,
+            ...patch,
+            technicalSpec: reshapeTechnicalSpec(u.technicalSpec, patch.category),
+          };
+        }
+        return { ...u, ...patch };
+      }),
+    });
   const remove = (id: string) =>
     set({ useCases: poc.useCases.filter((u) => u.id !== id) });
   const move = (id: string, dir: -1 | 1) => {

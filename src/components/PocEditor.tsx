@@ -13,6 +13,7 @@ import {
   TrackerSection,
   DocsSection,
 } from './sections/Sections';
+import { TechnicalSection } from './sections/TechnicalSection';
 import {
   createPoc,
   getPoc,
@@ -20,6 +21,7 @@ import {
   listLibrary,
 } from '../lib/client';
 import { emptyPoc } from '../lib/seed-data';
+import { emptyTechnicalSpec } from '../lib/technical-spec';
 import { evaluateAll, overallCompleteness } from '../lib/completeness';
 import { downloadDocx, downloadHtml } from '../lib/docx-generator';
 import { renderHtml } from '../lib/html-generator';
@@ -106,6 +108,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
                 persona: entry.persona,
                 objectives: entry.objectives,
                 successCriteria: entry.successCriteria,
+                technicalSpec: emptyTechnicalSpec(entry.category),
               },
             ],
           }
@@ -200,6 +203,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
       persona: entry.persona,
       objectives: entry.objectives,
       successCriteria: entry.successCriteria,
+      technicalSpec: emptyTechnicalSpec(entry.category),
     };
     patch({ useCases: [...poc.useCases, newCase] });
     setPickerOpen(false);
@@ -357,14 +361,15 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
             <ContextSection poc={poc} set={patch} />
             <ObjectivesSection poc={poc} set={patch} />
             <DiscoverySection poc={poc} set={patch} />
-            <TimelineSection poc={poc} set={patch} />
-            <FrameworkSection poc={poc} set={patch} />
             <UseCasesSection
               poc={poc}
               set={patch}
               library={library}
               onOpenLibraryPicker={() => setPickerOpen(true)}
             />
+            <TechnicalSection poc={poc} set={patch} />
+            <TimelineSection poc={poc} set={patch} />
+            <FrameworkSection poc={poc} set={patch} />
             <DependenciesSection poc={poc} set={patch} />
             <TrackerSection poc={poc} set={patch} />
             <DocsSection poc={poc} set={patch} />

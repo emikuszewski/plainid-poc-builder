@@ -1,4 +1,5 @@
-import type { PocDocument } from '../types';
+import type { PocDocument, UnknownableField, UseCase } from '../types';
+import { CATEGORY_HAS_TECH_BLOCK, DOWNSTREAM_AUTHORIZER_CATEGORIES } from '../types';
 
 export interface SectionStatus {
   id: string;
@@ -9,6 +10,12 @@ export interface SectionStatus {
 
 const has = (s: string | undefined | null) => !!(s && s.trim().length > 0);
 const hasN = (s: string | undefined | null, n: number) => !!(s && s.trim().length >= n);
+
+// An UnknownableField counts as satisfied if it has a value OR is explicitly
+// marked unknown (TBD). This is the "required, and if unknown we can note that"
+// behavior we agreed on.
+const ufSatisfied = (f: UnknownableField | undefined): boolean =>
+  !!f && (f.unknown || has(f.value));
 
 export function evaluateSection(poc: PocDocument, sectionId: string): SectionStatus {
   const issues: string[] = [];
@@ -72,6 +79,18 @@ export function evaluateSection(poc: PocDocument, sectionId: string): SectionSta
         'Some use cases have thin or missing objectives',
       );
       break;
+    case 'technical':
+      // Each use case with a tech block contributes its own checks.
+      // Identity & Compliance are downstream — they don't get an authorizer
+      // block but do need a downstream-authorizer selection.
+      poc.useCases
+        .filter((u) => CATEGORY_HAS_TECH_BLOCK[u.category])
+        .forEach((u) => evaluateTechnicalForUseCase(u, check));
+      // Edge case: no qualifying use cases → require at least one
+      if (!poc.useCases.some((u) => CATEGORY_HAS_TECH_BLOCK[u.category])) {
+        check(false, 'No use cases require a technical foundation block (all are "Other")');
+      }
+      break;
     case 'dependencies':
       check(hasN(poc.customerResponsibilities, 40), 'Customer responsibilities not populated');
       check(hasN(poc.plainidResponsibilities, 40), 'PlainID responsibilities not populated');
@@ -87,15 +106,110 @@ export function evaluateSection(poc: PocDocument, sectionId: string): SectionSta
   return { id: sectionId, required, satisfied, issues };
 }
 
+function evaluateTechnicalForUseCase(
+  u: UseCase,
+  check: (cond: boolean, label: string) => void,
+) {
+  const spec = u.technicalSpec;
+  const label = u.title || `Use Case "${u.category}"`;
+  if (!spec) {
+    check(false, `${label}: technical spec missing`);
+    return;
+  }
+
+  // Universal — required for every tech-block use case
+  check(spec.jwtSampleUrls.length > 0, `${label}: JWT samples missing`);
+  check(ufSatisfied(spec.identityAttributeCatalog), `${label}: identity attribute catalog missing`);
+  check(ufSatisfied(spec.testUserAccounts), `${label}: test user accounts not defined`);
+
+  // Authorizer block — only for non-downstream categories
+  if (!DOWNSTREAM_AUTHORIZER_CATEGORIES.includes(u.category)) {
+    const a = spec.authorizer;
+    check(!!a.selectedAuthorizerId, `${label}: no authorizer selected`);
+    if (a.selectedAuthorizerId === 'custom') {
+      check(ufSatisfied(a.customAuthorizerName), `${label}: custom authorizer name missing`);
+    }
+    check(ufSatisfied(a.version), `${label}: authorizer version not specified`);
+    check(ufSatisfied(a.deploymentTopology), `${label}: deployment topology missing`);
+    check(ufSatisfied(a.deploymentTarget), `${label}: deployment target missing`);
+    check(ufSatisfied(a.pdpEndpoint), `${label}: PDP endpoint missing`);
+    check(ufSatisfied(a.networkPath), `${label}: network path missing`);
+    check(ufSatisfied(a.identitySourcePaths), `${label}: identity source paths missing`);
+    check(ufSatisfied(a.requiredPipIntegrations), `${label}: required PIP integrations missing`);
+    check(ufSatisfied(a.credentialsLocation), `${label}: credentials location missing`);
+    check(ufSatisfied(a.credentialsProvisioner), `${label}: credentials provisioner missing`);
+    check(ufSatisfied(a.enforcementMode), `${label}: enforcement mode missing`);
+    check(ufSatisfied(a.failureMode), `${label}: failure mode not described`);
+    check(ufSatisfied(a.performanceBudget), `${label}: performance budget missing`);
+  }
+
+  // Per-category required fields
+  if (u.category === 'Data' && spec.data) {
+    check(ufSatisfied(spec.data.catalogScope), `${label}: data catalog scope missing`);
+    check(ufSatisfied(spec.data.classificationTaxonomy), `${label}: classification taxonomy missing`);
+    check(ufSatisfied(spec.data.sampleQueries), `${label}: sample queries missing`);
+    check(ufSatisfied(spec.data.connectionMethod), `${label}: connection method missing`);
+    check(ufSatisfied(spec.data.existingAccessControl), `${label}: existing access control missing`);
+    check(ufSatisfied(spec.data.performanceBaseline), `${label}: performance baseline missing`);
+    check(ufSatisfied(spec.data.dataResidencyConstraints), `${label}: data residency constraints missing`);
+  } else if (u.category === 'API Gateway' && spec.apiGateway) {
+    const g = spec.apiGateway;
+    check(g.apiCatalogUrls.length > 0, `${label}: API specifications (Swagger) missing`);
+    check(ufSatisfied(g.endpointResourceModel), `${label}: endpoint resource model missing`);
+    check(ufSatisfied(g.authPatternToday), `${label}: auth pattern today missing`);
+    check(ufSatisfied(g.tokenFlow), `${label}: token flow missing`);
+    check(ufSatisfied(g.gatewayVersion), `${label}: gateway version missing`);
+    check(ufSatisfied(g.existingPolicies), `${label}: existing gateway policies missing`);
+    check(ufSatisfied(g.backendTrustModel), `${label}: backend trust model missing`);
+    check(ufSatisfied(g.latencySla), `${label}: latency SLA missing`);
+  } else if (u.category === 'AI Authorization' && spec.aiAuth) {
+    const a = spec.aiAuth;
+    check(ufSatisfied(a.agentTopology), `${label}: agent topology missing`);
+    check(a.toolInventoryUrls.length > 0, `${label}: tool inventory specs missing`);
+    check(ufSatisfied(a.toolInventoryNotes), `${label}: tool inventory notes missing`);
+    check(ufSatisfied(a.callingIdentityPropagation), `${label}: identity propagation missing`);
+    check(ufSatisfied(a.ragSourcesInScope), `${label}: RAG sources missing`);
+    check(ufSatisfied(a.agentRuntime), `${label}: agent runtime missing`);
+    check(ufSatisfied(a.mcpTransport), `${label}: MCP transport missing`);
+    check(ufSatisfied(a.llmProvider), `${label}: LLM provider missing`);
+    check(ufSatisfied(a.failureModePolicy), `${label}: failure mode policy missing`);
+  } else if (u.category === 'Application' && spec.application) {
+    const a = spec.application;
+    check(ufSatisfied(a.appArchitecture), `${label}: app architecture missing`);
+    check(ufSatisfied(a.resourceModel), `${label}: resource model missing`);
+    check(ufSatisfied(a.existingAuthorization), `${label}: existing authorization missing`);
+    check(ufSatisfied(a.sessionModel), `${label}: session model missing`);
+    check(ufSatisfied(a.buildDeploy), `${label}: build/deploy missing`);
+    // domainSpecificRules is optional — not all apps have a complex domain
+  } else if (u.category === 'Identity' && spec.identity) {
+    const i = spec.identity;
+    check(i.downstreamAuthorizerUseCaseIds.length > 0, `${label}: no downstream authorizers selected`);
+    check(ufSatisfied(i.roleInventory), `${label}: role inventory missing`);
+    check(ufSatisfied(i.groupMembershipVolume), `${label}: group membership volume missing`);
+    check(ufSatisfied(i.lifecycleIntegration), `${label}: lifecycle integration missing`);
+    check(ufSatisfied(i.sourceOfTruthMapping), `${label}: source-of-truth mapping missing`);
+    check(ufSatisfied(i.federationBoundaries), `${label}: federation boundaries missing`);
+  } else if (u.category === 'Compliance' && spec.compliance) {
+    const c = spec.compliance;
+    check(c.downstreamAuthorizerUseCaseIds.length > 0, `${label}: no authorizers under audit`);
+    check(ufSatisfied(c.regulationSet), `${label}: regulation set missing`);
+    check(ufSatisfied(c.existingAuditPipeline), `${label}: existing audit pipeline missing`);
+    check(ufSatisfied(c.retentionRequirements), `${label}: retention requirements missing`);
+    check(ufSatisfied(c.sampleAuditQuestions), `${label}: sample audit questions missing`);
+    check(ufSatisfied(c.reviewerPersonas), `${label}: reviewer personas missing`);
+  }
+}
+
 export function evaluateAll(poc: PocDocument): SectionStatus[] {
   return [
     'customer',
     'context',
     'objectives',
     'discovery',
+    'usecases',
+    'technical',
     'timeline',
     'framework',
-    'usecases',
     'dependencies',
     'tracker',
     'docs',

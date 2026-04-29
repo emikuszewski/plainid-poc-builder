@@ -9,6 +9,7 @@ import {
   listPocs,
   updatePoc,
 } from '../lib/client';
+import { emptyTechnicalSpec } from '../lib/technical-spec';
 import type { PocDocument, UseCaseLibraryEntry, UseCaseCategory, UseCase } from '../types';
 
 const uid = () =>
@@ -130,6 +131,7 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
         persona: usingEntry.persona,
         objectives: usingEntry.objectives,
         successCriteria: usingEntry.successCriteria,
+        technicalSpec: emptyTechnicalSpec(usingEntry.category),
       };
       const updated: PocDocument = { ...target, useCases: [...target.useCases, newCase] };
       await updatePoc(pocId, updated);
