@@ -47,6 +47,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [activeSection, setActiveSection] = useState('customer');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSelection, setPickerSelection] = useState<string[]>([]);
   const [library, setLibrary] = useState<UseCaseLibraryEntry[]>([]);
   const [libraryFilter, setLibraryFilter] = useState<UseCaseCategory | 'All'>('All');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -193,20 +194,31 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
     downloadHtml(poc, renderHtml(poc, { standalone: true }));
   }
 
-  function insertFromLibrary(entry: UseCaseLibraryEntry) {
-    if (!poc) return;
-    const newCase = {
-      id: uid(),
-      libraryId: entry.id ?? null,
-      title: entry.title,
-      category: entry.category,
-      persona: entry.persona,
-      objectives: entry.objectives,
-      successCriteria: entry.successCriteria,
-      technicalSpec: emptyTechnicalSpec(entry.category),
-    };
-    patch({ useCases: [...poc.useCases, newCase] });
+  function insertSelectedFromLibrary() {
+    if (!poc || pickerSelection.length === 0) return;
+    // Build use cases in selection order (matches user's pick order)
+    const newCases = pickerSelection
+      .map((id) => library.find((e) => e.id === id))
+      .filter((e): e is UseCaseLibraryEntry => !!e)
+      .map((entry) => ({
+        id: uid(),
+        libraryId: entry.id ?? null,
+        title: entry.title,
+        category: entry.category,
+        persona: entry.persona,
+        objectives: entry.objectives,
+        successCriteria: entry.successCriteria,
+        technicalSpec: emptyTechnicalSpec(entry.category),
+      }));
+    patch({ useCases: [...poc.useCases, ...newCases] });
+    setPickerSelection([]);
     setPickerOpen(false);
+  }
+
+  function togglePickerSelection(id: string) {
+    setPickerSelection((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   }
 
   if (error) {
@@ -377,11 +389,14 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         </div>
       </div>
 
-      {/* Library picker modal */}
+      {/* Library picker modal — multi-select */}
       <Modal
         open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        title="Insert from Use Case Library"
+        onClose={() => {
+          setPickerOpen(false);
+          setPickerSelection([]);
+        }}
+        title="Insert from Use Case Templates"
         width={840}
       >
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
@@ -406,23 +421,80 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
             No library entries match this filter.
           </div>
         )}
-        <div className="space-y-2">
-          {filteredLibrary.map((e) => (
-            <button
-              key={e.id}
-              onClick={() => insertFromLibrary(e)}
-              className="w-full text-left bg-[var(--color-bg)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] hover:border-[var(--color-border-strong)] rounded-md p-3 transition-colors"
+        <div className="space-y-2 mb-4">
+          {filteredLibrary.map((e) => {
+            const selected = !!e.id && pickerSelection.includes(e.id);
+            const order = e.id ? pickerSelection.indexOf(e.id) : -1;
+            return (
+              <button
+                key={e.id}
+                onClick={() => e.id && togglePickerSelection(e.id)}
+                className={`w-full text-left border rounded-md p-3 transition-colors flex gap-3 items-start ${
+                  selected
+                    ? 'bg-[var(--color-pill-accent-bg)] border-[var(--color-pill-accent-border)]'
+                    : 'bg-[var(--color-bg)] hover:bg-[var(--color-bg-hover)] border-[var(--color-border)] hover:border-[var(--color-border-strong)]'
+                }`}
+              >
+                <div
+                  className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                    selected
+                      ? 'bg-[var(--color-accent)] border-[var(--color-accent)]'
+                      : 'border-[var(--color-border-strong)]'
+                  }`}
+                  aria-hidden
+                >
+                  {selected && (
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path
+                        d="M2 6l3 3 5-6"
+                        stroke="var(--color-bg)"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <Pill tone="neutral">{e.category.toUpperCase()}</Pill>
+                    {e.isSystem && <Pill tone="accent">SEEDED</Pill>}
+                    {selected && order >= 0 && (
+                      <span className="mono text-[10px] tracking-widest text-[var(--color-accent)]">
+                        #{order + 1}
+                      </span>
+                    )}
+                    <span className="text-[13px] font-medium text-[var(--color-text)]">{e.title}</span>
+                  </div>
+                  <div className="text-[11.5px] text-[var(--color-text-muted)] leading-relaxed">
+                    {e.description || `${e.persona}`}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="sticky bottom-0 -mx-5 -mb-4 px-5 py-3 bg-[var(--color-bg-elevated)] border-t border-[var(--color-border)] flex items-center justify-between">
+          <span className="text-[11.5px] text-[var(--color-text-muted)]">
+            {pickerSelection.length === 0
+              ? 'Select one or more templates to insert.'
+              : `${pickerSelection.length} selected · will insert in selection order`}
+          </span>
+          <div className="flex items-center gap-2">
+            {pickerSelection.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => setPickerSelection([])}>
+                Clear
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={insertSelectedFromLibrary}
+              disabled={pickerSelection.length === 0}
             >
-              <div className="flex items-baseline gap-2 mb-1">
-                <Pill tone="neutral">{e.category.toUpperCase()}</Pill>
-                {e.isSystem && <Pill tone="accent">SEEDED</Pill>}
-                <span className="text-[13px] font-medium text-[var(--color-text)]">{e.title}</span>
-              </div>
-              <div className="text-[11.5px] text-[var(--color-text-muted)] leading-relaxed">
-                {e.description || `${e.persona}`}
-              </div>
-            </button>
-          ))}
+              Add {pickerSelection.length || ''} →
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>
