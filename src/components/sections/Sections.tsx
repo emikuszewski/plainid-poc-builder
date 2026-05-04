@@ -623,9 +623,6 @@ export function UseCasesSection({
             className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4"
           >
             <header className="flex items-center gap-2 mb-3">
-              <span className="mono text-[11px] text-[var(--color-text-dim)] tracking-widest">
-                UC{String(i + 1).padStart(2, '0')}
-              </span>
               <Pill tone={u.libraryId ? 'accent' : 'neutral'}>
                 {u.libraryId ? 'FROM LIBRARY' : 'CUSTOM'}
               </Pill>

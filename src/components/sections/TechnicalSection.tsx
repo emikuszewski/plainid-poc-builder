@@ -1,6 +1,7 @@
 import React from 'react';
 import type {
   PocDocument,
+  TechnicalFoundation,
   UseCase,
   UseCaseCategory,
   UnknownableField,
@@ -24,6 +25,7 @@ import {
 } from '../../types';
 import { Field, Button, SectionCard, Pill, EmptyState } from '../ui/Primitives';
 import { evaluateSection } from '../../lib/completeness';
+import { emptyTechnicalFoundation } from '../../lib/technical-spec';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -36,7 +38,7 @@ interface SectionProps {
 }
 
 // ============================================================
-// Reusable: Unknown-able field
+// Reusable: Unknown-able field with quiet toggle
 // ============================================================
 function UFInput({
   field,
@@ -56,7 +58,7 @@ function UFInput({
           rows={rows}
           value={field.value}
           disabled={field.unknown}
-          placeholder={field.unknown ? 'Marked as TBD — will be resolved during POC' : placeholder}
+          placeholder={field.unknown ? 'TBD — to resolve during POC' : placeholder}
           onChange={(e) => onChange({ ...field, value: e.target.value })}
           className={field.unknown ? 'opacity-50' : ''}
         />
@@ -65,20 +67,20 @@ function UFInput({
           type="text"
           value={field.value}
           disabled={field.unknown}
-          placeholder={field.unknown ? 'Marked as TBD — will be resolved during POC' : placeholder}
+          placeholder={field.unknown ? 'TBD — to resolve during POC' : placeholder}
           onChange={(e) => onChange({ ...field, value: e.target.value })}
           className={field.unknown ? 'opacity-50' : ''}
         />
       )}
-      <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer select-none mb-0">
+      <label className="flex items-center gap-1.5 mt-1 cursor-pointer select-none mb-0">
         <input
           type="checkbox"
           checked={field.unknown}
           onChange={(e) => onChange({ ...field, unknown: e.target.checked })}
           className="!w-auto !h-auto m-0"
         />
-        <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
-          UNKNOWN — TBD
+        <span className="text-[10.5px] text-[var(--color-text-dim)] normal-case tracking-normal">
+          Unknown
         </span>
       </label>
     </div>
@@ -93,7 +95,7 @@ function UrlList({
   onChange,
   placeholder = 'https://...',
   labelPlaceholder = 'Label',
-  addLabel = '+ Add URL',
+  addLabel = '+ URL',
 }: {
   entries: UrlEntry[];
   onChange: (next: UrlEntry[]) => void;
@@ -130,7 +132,7 @@ function UrlList({
             />
             <input
               className="col-span-3"
-              placeholder="Notes (optional)"
+              placeholder="Notes"
               value={e.notes}
               onChange={(ev) => update(e.id, { notes: ev.target.value })}
             />
@@ -153,6 +155,53 @@ function UrlList({
 }
 
 // ============================================================
+// POC-level Universal block (rendered once at top of section)
+// ============================================================
+function UniversalFoundationBlock({
+  foundation,
+  onChange,
+}: {
+  foundation: TechnicalFoundation;
+  onChange: (next: TechnicalFoundation) => void;
+}) {
+  return (
+    <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 mb-6">
+      <header className="flex items-baseline gap-2 mb-3">
+        <span className="mono text-[11px] tracking-widest text-[var(--color-accent)]">
+          UNIVERSAL
+        </span>
+        <span className="text-[12.5px] text-[var(--color-text-muted)]">
+          Identity & test users — applies to every use case
+        </span>
+      </header>
+      <Field label="JWT / OIDC samples" required hint="Decoded JWT samples or token introspection links.">
+        <UrlList
+          entries={foundation.jwtSampleUrls}
+          onChange={(next) => onChange({ ...foundation, jwtSampleUrls: next })}
+          labelPlaceholder="e.g. Employee JWT sample"
+        />
+      </Field>
+      <Field label="Identity attributes" required hint="Available claims, types, refresh cadence.">
+        <UFInput
+          field={foundation.identityAttributeCatalog}
+          onChange={(f) => onChange({ ...foundation, identityAttributeCatalog: f })}
+          rows={3}
+          placeholder="employeeId, dept, groups[], region; refreshed at token issue"
+        />
+      </Field>
+      <Field label="Test users" required hint="Min 3–5 accounts; provisioning owner; access path.">
+        <UFInput
+          field={foundation.testUserAccounts}
+          onChange={(f) => onChange({ ...foundation, testUserAccounts: f })}
+          rows={3}
+          placeholder="5 accounts in test IdP, 1 per persona; creds in shared vault"
+        />
+      </Field>
+    </div>
+  );
+}
+
+// ============================================================
 // Authorizer block
 // ============================================================
 function AuthorizerBlock({
@@ -169,8 +218,8 @@ function AuthorizerBlock({
   onCopyFrom: (sourceUseCaseId: string) => void;
 }) {
   const isDownstream = DOWNSTREAM_AUTHORIZER_CATEGORIES.includes(uc.category);
+  if (isDownstream) return null;
 
-  // Other use cases sharing this category — candidates for "copy authorizer config from"
   const copyCandidates = allUseCases.filter(
     (other) =>
       other.id !== uc.id &&
@@ -181,18 +230,9 @@ function AuthorizerBlock({
 
   const setSelected = (authorizerId: string) => {
     const auth = findAuthorizer(authorizerId);
-    // Auto-populate authorizerDocs with the catalog entry's docsUrl, but
-    // only if the user hasn't already added URLs (don't trample edits).
     const docs =
       spec.authorizerDocs.length === 0 && auth?.docsUrl
-        ? [
-            {
-              id: uid(),
-              label: 'PlainID Authorizer Documentation',
-              url: auth.docsUrl,
-              notes: '',
-            },
-          ]
+        ? [{ id: uid(), label: 'Documentation', url: auth.docsUrl, notes: '' }]
         : spec.authorizerDocs;
     onChange({ ...spec, selectedAuthorizerId: authorizerId, authorizerDocs: docs });
   };
@@ -203,28 +243,18 @@ function AuthorizerBlock({
   const catalogForCategory = authorizersForCategory(uc.category);
   const selectedEntry = findAuthorizer(spec.selectedAuthorizerId);
 
-  if (isDownstream) {
-    // Identity & Compliance don't pick their own authorizer — they reference
-    // downstream ones from the same POC. Render a different block.
-    return null; // handled by IdentityBlock / ComplianceBlock instead
-  }
-
   return (
     <div className="border border-[var(--color-border)] rounded-md p-4 mb-4">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="mono text-[10px] tracking-widest text-[var(--color-accent)]">
+      <header className="flex items-center gap-2 mb-3">
+        <span className="mono text-[11px] tracking-widest text-[var(--color-accent)]">
           AUTHORIZER
         </span>
         {selectedEntry && (
           <Pill tone="neutral">{selectedEntry.enforcementMode.toUpperCase()}</Pill>
         )}
-      </div>
+      </header>
 
-      <Field
-        label="Selected authorizer"
-        required
-        hint="Determines deployment topology, integration pattern, and the policies PlainID can express. Pick from the catalog or 'Other / Custom' to name an unsupported authorizer."
-      >
+      <Field label="Authorizer" required>
         <select
           value={spec.selectedAuthorizerId}
           onChange={(e) => setSelected(e.target.value)}
@@ -249,16 +279,14 @@ function AuthorizerBlock({
           <UFInput
             field={spec.customAuthorizerName}
             onChange={(f) => updateField('customAuthorizerName', f)}
-            placeholder="e.g. ‘Snowflake Authorizer (custom build)’ or vendor name"
+            placeholder="Vendor or build name"
           />
         </Field>
       )}
 
       {copyCandidates.length > 0 && (
         <div className="mb-4 -mt-2 flex items-center gap-2 flex-wrap">
-          <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
-            COPY AUTHORIZER CONFIG FROM
-          </span>
+          <span className="text-[11px] text-[var(--color-text-dim)]">Copy from:</span>
           {copyCandidates.map((c) => (
             <Button
               key={c.id}
@@ -274,167 +302,118 @@ function AuthorizerBlock({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
-        <Field
-          label="Authorizer version"
-          required
-          hint="Pinned release version for the POC."
-        >
+        <Field label="Version" required>
           <UFInput
             field={spec.version}
             onChange={(f) => updateField('version', f)}
-            placeholder="e.g. 4.5.2"
+            placeholder="4.5.2"
           />
         </Field>
-        <Field
-          label="Enforcement mode"
-          required
-          hint="Inline proxy / native target-system policy / SDK / plugin."
-        >
+        <Field label="Enforcement mode" required hint="Proxy, native, SDK, plugin, lambda.">
           <UFInput
             field={spec.enforcementMode}
             onChange={(f) => updateField('enforcementMode', f)}
-            placeholder="e.g. Proxy (inline) — intercepts JDBC traffic"
+            placeholder="Proxy (inline)"
           />
         </Field>
-        <Field
-          label="Deployment topology"
-          required
-          hint="Helm/K8s, Docker standalone, AWS Lambda, plugin install, etc."
-        >
+        <Field label="Deployment" required hint="Helm, Docker, Lambda, plugin, etc.">
           <UFInput
             field={spec.deploymentTopology}
             onChange={(f) => updateField('deploymentTopology', f)}
-            placeholder="e.g. Helm chart in customer K8s cluster"
+            placeholder="Helm chart in customer K8s"
           />
         </Field>
-        <Field
-          label="Deployment target"
-          required
-          hint="Which infrastructure: customer cluster, AWS account, Snowflake account, Apigee org…"
-        >
+        <Field label="Target" required hint="Where it runs.">
           <UFInput
             field={spec.deploymentTarget}
             onChange={(f) => updateField('deploymentTarget', f)}
-            placeholder="e.g. customer EKS cluster (us-east-1)"
+            placeholder="customer EKS / us-east-1"
           />
         </Field>
-        <Field
-          label="PDP endpoint"
-          required
-          hint="URL the authorizer calls to get decisions."
-        >
+        <Field label="PDP endpoint" required>
           <UFInput
             field={spec.pdpEndpoint}
             onChange={(f) => updateField('pdpEndpoint', f)}
-            placeholder="e.g. https://runtime.<tenant>.plainid.io/api/runtime/resolution/v3"
+            placeholder="https://runtime.<tenant>.plainid.io/..."
           />
         </Field>
-        <Field
-          label="Network path"
-          required
-          hint="Direct internet, PrivateLink, VPN, transit gateway."
-        >
+        <Field label="Network path" required hint="Direct, PrivateLink, VPN.">
           <UFInput
             field={spec.networkPath}
             onChange={(f) => updateField('networkPath', f)}
-            placeholder="e.g. PrivateLink to PlainID SaaS in us-east-1"
+            placeholder="PrivateLink to PlainID SaaS"
           />
         </Field>
-        <Field
-          label="Identity source paths"
-          required
-          hint="Hostnames/ports/auth methods for IdP, IGA, directory."
-        >
+        <Field label="Identity sources" required>
           <UFInput
             field={spec.identitySourcePaths}
             onChange={(f) => updateField('identitySourcePaths', f)}
             rows={2}
-            placeholder="e.g. ldaps://ad.corp.example.com:636 (svc account); https://ping.example.com (OIDC)"
+            placeholder="ldaps://ad.corp:636; https://ping.example.com"
           />
         </Field>
-        <Field
-          label="Required PIP integrations"
-          required
-          hint="Identity sources that must be wired for this authorizer to resolve identity claims."
-        >
+        <Field label="PIP integrations" required hint="Sources to wire before this authorizer works.">
           <UFInput
             field={spec.requiredPipIntegrations}
             onChange={(f) => updateField('requiredPipIntegrations', f)}
             rows={2}
-            placeholder="e.g. AD groups (LDAP), SailPoint role catalog (REST)"
+            placeholder="AD groups (LDAP); SailPoint roles (REST)"
           />
         </Field>
-        <Field label="Credentials location" required hint="Where secrets live.">
+        <Field label="Credentials store" required>
           <UFInput
             field={spec.credentialsLocation}
             onChange={(f) => updateField('credentialsLocation', f)}
-            placeholder="e.g. AWS Secrets Manager / HashiCorp Vault / K8s secret"
+            placeholder="AWS Secrets Manager / Vault"
           />
         </Field>
-        <Field label="Credentials provisioner" required hint="Who creates and rotates them.">
+        <Field label="Provisioned by" required>
           <UFInput
             field={spec.credentialsProvisioner}
             onChange={(f) => updateField('credentialsProvisioner', f)}
-            placeholder="e.g. customer Platform team"
+            placeholder="Customer Platform team"
           />
         </Field>
-        <Field
-          label="Failure mode"
-          required
-          hint="Behavior when PDP unreachable: fail-open / fail-closed / cache TTL."
-        >
+        <Field label="Failure mode" required hint="Open / closed; cache TTL.">
           <UFInput
             field={spec.failureMode}
             onChange={(f) => updateField('failureMode', f)}
-            placeholder="e.g. Fail-closed; 30s decision cache"
+            placeholder="Fail-closed; 30s cache"
           />
         </Field>
-        <Field
-          label="Performance budget"
-          required
-          hint="Acceptable latency overhead introduced by the authorizer."
-        >
+        <Field label="Latency budget" required>
           <UFInput
             field={spec.performanceBudget}
             onChange={(f) => updateField('performanceBudget', f)}
-            placeholder="e.g. < 25ms p99 added to query latency"
+            placeholder="< 25ms p99"
           />
         </Field>
       </div>
 
-      <Field
-        label="Sample request / response"
-        hint="For query-modifying or token-enriching authorizers, the before/after for at least one realistic example. Helps customer architects validate the integration."
-      >
+      <Field label="Sample I/O" hint="Before/after for query mod or token enrichment.">
         <UFInput
           field={spec.sampleRequestResponse}
           onChange={(f) => updateField('sampleRequestResponse', f)}
-          rows={4}
-          placeholder="Original SQL: SELECT * FROM clients;\nAuthorized SQL: SELECT name, region FROM clients WHERE region='US';"
+          rows={3}
+          placeholder="Original: SELECT * FROM clients;\nAuthorized: SELECT name, region FROM clients WHERE region='US';"
         />
       </Field>
 
-      <Field
-        label="Authorizer documentation"
-        hint="Auto-populated from the selected authorizer. Add additional links as needed (e.g. customer-internal runbooks)."
-      >
+      <Field label="Documentation">
         <UrlList
           entries={spec.authorizerDocs}
           onChange={(next) => onChange({ ...spec, authorizerDocs: next })}
-          labelPlaceholder="e.g. Deployment Guide"
-          addLabel="+ Add doc URL"
+          labelPlaceholder="Deployment Guide"
+          addLabel="+ Doc URL"
         />
       </Field>
 
-      <Field
-        label="Open items / TBDs"
-        hint="Specific authorizer-related questions that need to be resolved during the POC."
-      >
+      <Field label="Open items">
         <UFInput
           field={spec.openItems}
           onChange={(f) => updateField('openItems', f)}
-          rows={3}
-          placeholder="e.g. Confirm whether customer's network policy permits egress to PlainID SaaS PrivateLink endpoint"
+          rows={2}
+          placeholder="Confirm egress to PlainID PrivateLink"
         />
       </Field>
     </div>
@@ -442,113 +421,76 @@ function AuthorizerBlock({
 }
 
 // ============================================================
-// Per-category blocks
+// Per-category blocks (subheader removed — category pill in card header carries the label)
 // ============================================================
-function DataBlock({
-  spec,
-  onChange,
-}: {
-  spec: DataSpec;
-  onChange: (next: DataSpec) => void;
-}) {
+function DataBlock({ spec, onChange }: { spec: DataSpec; onChange: (n: DataSpec) => void }) {
   const update = <K extends keyof DataSpec>(key: K, next: DataSpec[K]) =>
     onChange({ ...spec, [key]: next });
   return (
     <div className="border border-[var(--color-border)] rounded-md p-4 mb-4">
-      <div className="mono text-[10px] tracking-widest text-[var(--color-text-muted)] mb-3">
-        DATA LAYER SPECIFICS
-      </div>
-      <Field
-        label="Data catalog scope"
-        required
-        hint="Catalogs, schemas, tables/views in scope, approximate row counts."
-      >
+      <Field label="Catalog scope" required hint="Catalogs, schemas, tables, approx row counts.">
         <UFInput
           field={spec.catalogScope}
           onChange={(f) => update('catalogScope', f)}
-          rows={3}
-          placeholder="e.g. catalog 'prod' / schema 'sales' / 12 tables / ~80M rows"
+          rows={2}
+          placeholder="catalog 'prod' / schema 'sales' / 12 tables / ~80M rows"
         />
       </Field>
       <Field
-        label="Classification taxonomy"
+        label="Classification"
         required
-        hint="Existing scheme (L1–L5, PII/PHI/PCI tags, etc.) and where it lives (table comments, Unity Catalog tags, external system)."
+        hint="Existing scheme and where it lives (tags, table comments, external)."
       >
         <UFInput
           field={spec.classificationTaxonomy}
           onChange={(f) => update('classificationTaxonomy', f)}
-          rows={3}
-          placeholder="e.g. L1 Public, L2 Internal, L3 Confidential, L4 Restricted, L5 Highly Restricted — stored as Unity Catalog tags"
+          rows={2}
+          placeholder="L1–L5 stored as Unity Catalog tags"
         />
       </Field>
-      <Field
-        label="Classification documentation"
-        hint="Links to the customer's data classification policy or scheme."
-      >
+      <Field label="Classification docs">
         <UrlList
           entries={spec.classificationDocsUrls}
           onChange={(next) => update('classificationDocsUrls', next)}
-          labelPlaceholder="e.g. Internal data class policy"
+          labelPlaceholder="Data class policy"
         />
       </Field>
-      <Field
-        label="Sample queries"
-        required
-        hint="3–5 real queries representing common access patterns (joins, aggregates, views)."
-      >
+      <Field label="Sample queries" required hint="3–5 representative queries.">
         <UFInput
           field={spec.sampleQueries}
           onChange={(f) => update('sampleQueries', f)}
-          rows={5}
-          placeholder="-- Account summary by region&#10;SELECT region, SUM(balance) FROM accounts WHERE status='active' GROUP BY region;"
+          rows={4}
+          placeholder="SELECT region, SUM(balance) FROM accounts WHERE status='active' GROUP BY region;"
         />
       </Field>
-      <Field
-        label="Connection method"
-        required
-        hint="JDBC driver version, connection pooler, workspace token vs. service principal."
-      >
+      <Field label="Connection method" required hint="Driver, pooler, identity used to connect.">
         <UFInput
           field={spec.connectionMethod}
           onChange={(f) => update('connectionMethod', f)}
-          rows={2}
-          placeholder="e.g. Databricks JDBC 2.6.40 via service principal; PgBouncer in transaction pooling mode"
+          placeholder="Databricks JDBC via service principal"
         />
       </Field>
-      <Field
-        label="Existing access control"
-        required
-        hint="What's enforced today (Unity Catalog grants, row filters, dynamic views, custom procs); what stays vs. gets replaced."
-      >
+      <Field label="Existing access control" required hint="What's there today; what stays vs. replaced.">
         <UFInput
           field={spec.existingAccessControl}
           onChange={(f) => update('existingAccessControl', f)}
-          rows={3}
-          placeholder="e.g. Unity Catalog GRANTs at table-level; legacy view-based row filtering — both replaced by PlainID"
+          rows={2}
+          placeholder="Unity Catalog GRANTs + view-based row filtering — both replaced"
         />
       </Field>
-      <Field
-        label="Performance baseline"
-        required
-        hint="Current query latency p50/p95, target with PlainID in path."
-      >
+      <Field label="Performance baseline" required hint="Current p50/p95; target with PlainID in path.">
         <UFInput
           field={spec.performanceBaseline}
           onChange={(f) => update('performanceBaseline', f)}
-          placeholder="e.g. p50 280ms / p95 1.2s; target +25ms p95 with authorizer"
+          placeholder="p50 280ms / p95 1.2s; +25ms target"
         />
       </Field>
-      <Field
-        label="Data residency constraints"
-        required
-        hint="Regions, cross-region replication, what triggers a residency check."
-      >
+      <Field label="Data residency" required>
         <UFInput
           field={spec.dataResidencyConstraints}
           onChange={(f) => update('dataResidencyConstraints', f)}
           rows={2}
-          placeholder="e.g. EU customer data must stay in eu-west-1; US data in us-east-1; cross-region access denied by default"
+          placeholder="EU data in eu-west-1; cross-region access denied"
         />
       </Field>
     </div>
@@ -560,231 +502,154 @@ function ApiGatewayBlock({
   onChange,
 }: {
   spec: ApiGatewaySpec;
-  onChange: (next: ApiGatewaySpec) => void;
+  onChange: (n: ApiGatewaySpec) => void;
 }) {
   const update = <K extends keyof ApiGatewaySpec>(key: K, next: ApiGatewaySpec[K]) =>
     onChange({ ...spec, [key]: next });
   return (
     <div className="border border-[var(--color-border)] rounded-md p-4 mb-4">
-      <div className="mono text-[10px] tracking-widest text-[var(--color-text-muted)] mb-3">
-        API GATEWAY SPECIFICS
-      </div>
-      <Field
-        label="API specifications"
-        required
-        hint="OpenAPI / Swagger URLs for every API in scope. PlainID needs these to map endpoints to authorization decisions."
-      >
+      <Field label="API specs" required hint="OpenAPI / Swagger URLs for every API in scope.">
         <UrlList
           entries={spec.apiCatalogUrls}
           onChange={(next) => update('apiCatalogUrls', next)}
-          labelPlaceholder="e.g. Accounts API v2 (Swagger)"
+          labelPlaceholder="Accounts API v2"
           placeholder="https://api.example.com/swagger.json"
         />
       </Field>
       <Field
-        label="Endpoint resource model"
+        label="Resource model"
         required
-        hint="For each API: resource type, path parameters, query parameters and request body fields that drive authorization."
+        hint="Path/query/body fields that drive authorization, per endpoint."
       >
         <UFInput
           field={spec.endpointResourceModel}
           onChange={(f) => update('endpointResourceModel', f)}
-          rows={4}
-          placeholder="e.g. /accounts/{accountId} → resource=account, scopes from token; /transfers POST body.fromAccountId/toAccountId both checked"
+          rows={3}
+          placeholder="/accounts/{accountId} → resource=account; /transfers POST checks fromAccountId+toAccountId"
         />
       </Field>
-      <Field
-        label="Auth pattern today"
-        required
-        hint="API key, OAuth client credentials, end-user JWT pass-through, mTLS, custom headers."
-      >
+      <Field label="Auth pattern" required hint="What authenticates today.">
         <UFInput
           field={spec.authPatternToday}
           onChange={(f) => update('authPatternToday', f)}
           rows={2}
-          placeholder="e.g. End-user JWT in Authorization header (Bearer); validated by Apigee then passed to backend"
+          placeholder="End-user JWT (Bearer); validated by Apigee"
         />
       </Field>
-      <Field
-        label="Token flow"
-        required
-        hint="Issuer, claims structure, audience values, token lifetime, refresh behavior."
-      >
+      <Field label="Token flow" required hint="Issuer, claims, audience, lifetime.">
         <UFInput
           field={spec.tokenFlow}
           onChange={(f) => update('tokenFlow', f)}
-          rows={3}
-          placeholder="e.g. Issued by Ping (PingFederate); claims: sub, groups[], dept, region; aud='accounts-api'; 1h lifetime"
+          rows={2}
+          placeholder="Ping issues; claims sub/groups[]/dept; aud=accounts-api; 1h"
         />
       </Field>
-      <Field
-        label="Gateway version & plugin compatibility"
-        required
-        hint="Apigee X vs. Edge, Kong OSS vs. Enterprise, plugin SDK version."
-      >
+      <Field label="Gateway version" required>
         <UFInput
           field={spec.gatewayVersion}
           onChange={(f) => update('gatewayVersion', f)}
-          placeholder="e.g. Apigee X / 1.10; PlainID Apigee Authorizer plugin v3.x"
+          placeholder="Apigee X 1.10"
         />
       </Field>
-      <Field
-        label="Existing gateway policies"
-        required
-        hint="Rate limiting, schema validation, transformation — what stays in place."
-      >
+      <Field label="Existing policies" required hint="Rate limit, schema val, etc. — what stays.">
         <UFInput
           field={spec.existingPolicies}
           onChange={(f) => update('existingPolicies', f)}
           rows={2}
-          placeholder="e.g. Rate limit (10k/min) and JWT validation stay; remove custom auth proxy"
+          placeholder="Rate limit + JWT validation stay; remove custom auth proxy"
         />
       </Field>
-      <Field
-        label="Backend trust model"
-        required
-        hint="Is the backend zero-trust (validates everything) or trusts the gateway?"
-      >
+      <Field label="Backend trust model" required>
         <UFInput
           field={spec.backendTrustModel}
           onChange={(f) => update('backendTrustModel', f)}
-          placeholder="e.g. Trust gateway: backend assumes JWT already validated and authorization already passed"
+          placeholder="Backend trusts gateway"
         />
       </Field>
-      <Field
-        label="Latency SLA"
-        required
-        hint="Current API p99 and acceptable PlainID overhead; fail-open vs. fail-closed."
-      >
+      <Field label="Latency SLA" required>
         <UFInput
           field={spec.latencySla}
           onChange={(f) => update('latencySla', f)}
-          placeholder="e.g. p99 ≤ 250ms; max +30ms PlainID overhead; fail-closed"
+          placeholder="p99 ≤ 250ms; +30ms PlainID; fail-closed"
         />
       </Field>
     </div>
   );
 }
 
-function AiAuthBlock({
-  spec,
-  onChange,
-}: {
-  spec: AiAuthSpec;
-  onChange: (next: AiAuthSpec) => void;
-}) {
+function AiAuthBlock({ spec, onChange }: { spec: AiAuthSpec; onChange: (n: AiAuthSpec) => void }) {
   const update = <K extends keyof AiAuthSpec>(key: K, next: AiAuthSpec[K]) =>
     onChange({ ...spec, [key]: next });
   return (
     <div className="border border-[var(--color-border)] rounded-md p-4 mb-4">
-      <div className="mono text-[10px] tracking-widest text-[var(--color-text-muted)] mb-3">
-        AI AUTHORIZATION SPECIFICS
-      </div>
-      <Field
-        label="Agent topology"
-        required
-        hint="Single agent / multi-agent supervisor / LangGraph state machine; tool catalog scope."
-      >
+      <Field label="Agent topology" required hint="Single, supervisor, LangGraph state machine.">
         <UFInput
           field={spec.agentTopology}
           onChange={(f) => update('agentTopology', f)}
           rows={2}
-          placeholder="e.g. LangGraph supervisor agent with 3 specialized sub-agents; ~12 tools total"
+          placeholder="LangGraph supervisor + 3 sub-agents; ~12 tools"
         />
       </Field>
-      <Field
-        label="Tool inventory specifications"
-        required
-        hint="Specs for tools/functions the agent can invoke (OpenAPI, Pydantic, MCP tool defs)."
-      >
+      <Field label="Tool specs" required hint="OpenAPI / Pydantic / MCP tool definitions.">
         <UrlList
           entries={spec.toolInventoryUrls}
           onChange={(next) => update('toolInventoryUrls', next)}
-          labelPlaceholder="e.g. Tool registry export"
-          placeholder="https://repo.example.com/tools.json"
+          labelPlaceholder="Tool registry"
         />
       </Field>
-      <Field
-        label="Tool inventory notes"
-        required
-        hint="Each tool's downstream side effects (read, write, external calls)."
-      >
+      <Field label="Tool effects" required hint="Read / write / external calls per tool.">
         <UFInput
           field={spec.toolInventoryNotes}
           onChange={(f) => update('toolInventoryNotes', f)}
-          rows={4}
-          placeholder="e.g. search_kb (read RAG); transfer_funds (write, calls payments API); send_email (external write)"
+          rows={3}
+          placeholder="search_kb (read RAG); transfer_funds (write); send_email (external)"
         />
       </Field>
-      <Field
-        label="Calling identity propagation"
-        required
-        hint="How the user's JWT reaches the agent (header pass-through, ambient context, A2A delegation)."
-      >
+      <Field label="Identity propagation" required>
         <UFInput
           field={spec.callingIdentityPropagation}
           onChange={(f) => update('callingIdentityPropagation', f)}
           rows={2}
-          placeholder="e.g. End-user JWT passed via Authorization header; agent re-uses it for downstream tool calls"
+          placeholder="User JWT in Authorization header; reused for downstream calls"
         />
       </Field>
-      <Field
-        label="RAG sources in scope"
-        required
-        hint="Vector DB(s), document corpus, classification on embedded chunks, chunk-level vs. doc-level authorization."
-      >
+      <Field label="RAG sources" required hint="Vector DBs, corpus, chunk-level vs. doc-level.">
         <UFInput
           field={spec.ragSourcesInScope}
           onChange={(f) => update('ragSourcesInScope', f)}
-          rows={3}
-          placeholder="e.g. Pinecone index 'support-kb' (40k chunks); each chunk tagged with source-doc classification; chunk-level filtering"
+          rows={2}
+          placeholder="Pinecone index 'support-kb' (40k chunks); chunk-level filtering"
         />
       </Field>
-      <Field
-        label="Agent runtime"
-        required
-        hint="LangServe, custom FastAPI, AWS Bedrock Agents, runtime authentication to MCP servers."
-      >
+      <Field label="Agent runtime" required>
         <UFInput
           field={spec.agentRuntime}
           onChange={(f) => update('agentRuntime', f)}
           rows={2}
-          placeholder="e.g. LangServe behind ALB; OAuth2 client-credentials to internal MCP servers"
+          placeholder="LangServe behind ALB; OAuth2 to MCP servers"
         />
       </Field>
-      <Field
-        label="MCP transport"
-        required
-        hint="stdio / SSE / streamable HTTP; auth pattern (bearer, mTLS, none)."
-      >
+      <Field label="MCP transport" required>
         <UFInput
           field={spec.mcpTransport}
           onChange={(f) => update('mcpTransport', f)}
-          placeholder="e.g. Streamable HTTP with bearer token; mTLS for prod"
+          placeholder="Streamable HTTP + bearer; mTLS in prod"
         />
       </Field>
-      <Field
-        label="LLM provider"
-        required
-        hint="Model, API key scope, rate limits, what data crosses provider boundary."
-      >
+      <Field label="LLM provider" required>
         <UFInput
           field={spec.llmProvider}
           onChange={(f) => update('llmProvider', f)}
           rows={2}
-          placeholder="e.g. AWS Bedrock — Claude Opus; data stays in customer AWS account; no third-party data egress"
+          placeholder="AWS Bedrock — Claude Opus; data stays in customer account"
         />
       </Field>
-      <Field
-        label="Failure mode policy"
-        required
-        hint="What does the agent do on PlainID DENY (refuse, retry with constrained tools, fail to user)."
-      >
+      <Field label="Failure mode" required hint="On DENY: refuse / retry constrained / fail to user.">
         <UFInput
           field={spec.failureModePolicy}
           onChange={(f) => update('failureModePolicy', f)}
           rows={2}
-          placeholder="e.g. Refuse with explanation; do NOT retry with different tool; log decision id for audit"
+          placeholder="Refuse with explanation; log decision id"
         />
       </Field>
     </div>
@@ -796,84 +661,65 @@ function ApplicationBlock({
   onChange,
 }: {
   spec: ApplicationSpec;
-  onChange: (next: ApplicationSpec) => void;
+  onChange: (n: ApplicationSpec) => void;
 }) {
   const update = <K extends keyof ApplicationSpec>(key: K, next: ApplicationSpec[K]) =>
     onChange({ ...spec, [key]: next });
   return (
     <div className="border border-[var(--color-border)] rounded-md p-4 mb-4">
-      <div className="mono text-[10px] tracking-widest text-[var(--color-text-muted)] mb-3">
-        APPLICATION SPECIFICS
-      </div>
-      <Field
-        label="Application architecture"
-        required
-        hint="Monolith vs. microservices, framework version (Spring Boot 2 vs. 3), JVM version."
-      >
+      <Field label="Architecture" required hint="Monolith vs. microservices, framework, runtime.">
         <UFInput
           field={spec.appArchitecture}
           onChange={(f) => update('appArchitecture', f)}
           rows={2}
-          placeholder="e.g. Spring Boot 3.2 monolith on JDK 21; deployed as fat jar to on-prem JVM"
+          placeholder="Spring Boot 3.2 monolith on JDK 21"
         />
       </Field>
       <Field
         label="Resource model"
         required
-        hint="Entity hierarchy, ownership relationships, parent-child propagation rules."
+        hint="Entity hierarchy and propagation rules."
       >
         <UFInput
           field={spec.resourceModel}
           onChange={(f) => update('resourceModel', f)}
-          rows={3}
-          placeholder="e.g. Org → Department → Team → Project → Task; access propagates down by default; explicit overrides allowed"
+          rows={2}
+          placeholder="Org → Dept → Team → Project; access propagates down"
         />
       </Field>
-      <Field
-        label="Existing authorization"
-        required
-        hint="Annotations, custom interceptors, role tables in DB, what gets replaced vs. wrapped."
-      >
+      <Field label="Existing authorization" required hint="What's there today; what gets replaced.">
         <UFInput
           field={spec.existingAuthorization}
           onChange={(f) => update('existingAuthorization', f)}
-          rows={3}
-          placeholder="e.g. @PreAuthorize annotations + custom DB role check; both replaced by PlainID Spring SDK calls"
+          rows={2}
+          placeholder="@PreAuthorize + DB role check — both replaced"
         />
       </Field>
-      <Field
-        label="Session model"
-        required
-        hint="Stateful sessions, JWT-only, when does authorization context refresh."
-      >
+      <Field label="Session model" required>
         <UFInput
           field={spec.sessionModel}
           onChange={(f) => update('sessionModel', f)}
           rows={2}
-          placeholder="e.g. JWT sessions (1h); decision cache invalidated on token refresh"
+          placeholder="JWT (1h); decision cache invalidates on refresh"
         />
       </Field>
-      <Field
-        label="Build / deploy"
-        required
-        hint="Maven/Gradle, CI/CD pipeline, deployment targets, can we add a dependency without security review?"
-      >
+      <Field label="Build & deploy" required hint="Build tool, CI, dependency approval.">
         <UFInput
           field={spec.buildDeploy}
           onChange={(f) => update('buildDeploy', f)}
           rows={2}
-          placeholder="e.g. Maven; GitLab CI; security review needed for new deps — already approved for PlainID Spring SDK"
+          placeholder="Maven; GitLab CI; PlainID dep already approved"
         />
       </Field>
       <Field
-        label="Domain-specific rules"
-        hint="HCM role matrix × sensitivity tier, residency-by-jurisdiction, etc. Specific to the application's domain."
+        label="Domain rules"
+        hint="HCM matrix, residency, etc. Optional — skip if not applicable."
       >
         <UFInput
           field={spec.domainSpecificRules}
           onChange={(f) => update('domainSpecificRules', f)}
-          rows={4}
-          placeholder="e.g. HRBP can see L1-L3 for own org; L1-L4 for direct reports; never own peers' L4 data"
+          rows={3}
+          placeholder="HRBP sees L1–L3 own org; L1–L4 direct reports; never peers' L4"
         />
       </Field>
     </div>
@@ -889,7 +735,7 @@ function IdentityBlock({
   spec: IdentitySpec;
   uc: UseCase;
   allUseCases: UseCase[];
-  onChange: (next: IdentitySpec) => void;
+  onChange: (n: IdentitySpec) => void;
 }) {
   const update = <K extends keyof IdentitySpec>(key: K, next: IdentitySpec[K]) =>
     onChange({ ...spec, [key]: next });
@@ -910,18 +756,14 @@ function IdentityBlock({
 
   return (
     <div className="border border-[var(--color-border)] rounded-md p-4 mb-4">
-      <div className="mono text-[10px] tracking-widest text-[var(--color-text-muted)] mb-3">
-        IDENTITY SPECIFICS
-      </div>
       <Field
         label="Downstream authorizers"
         required
-        hint="Identity / role consolidation feeds policies that ultimately get enforced by other authorizers in the POC. Pick which ones."
+        hint="Identity work feeds policies enforced by other use cases — pick which."
       >
         {candidates.length === 0 ? (
           <div className="text-[11.5px] text-[var(--color-text-dim)] py-2">
-            No other use cases with authorizers in this POC yet. Add a Data, API Gateway, AI
-            Authorization, or Application use case first.
+            No other use cases with authorizers yet. Add one first.
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -950,44 +792,44 @@ function IdentityBlock({
           </div>
         )}
       </Field>
-      <Field label="Role inventory" required>
+      <Field label="Role inventory" required hint="Counts by source, naming conventions.">
         <UFInput
           field={spec.roleInventory}
           onChange={(f) => update('roleInventory', f)}
-          rows={3}
-          placeholder="e.g. ~3,200 AD groups + 800 SailPoint roles + 120 LDAP groups; naming conventions inconsistent across systems"
+          rows={2}
+          placeholder="~3,200 AD groups + 800 SailPoint roles"
         />
       </Field>
-      <Field label="Group membership volume" required>
+      <Field label="Group volume" required hint="Largest groups, deepest nesting.">
         <UFInput
           field={spec.groupMembershipVolume}
           onChange={(f) => update('groupMembershipVolume', f)}
           rows={2}
-          placeholder="e.g. Largest group ~12k members; deepest nesting 6 levels; transitive resolved at logon"
+          placeholder="Largest ~12k members; deepest nesting 6 levels"
         />
       </Field>
-      <Field label="Lifecycle integration" required>
+      <Field label="Lifecycle (JML)" required>
         <UFInput
           field={spec.lifecycleIntegration}
           onChange={(f) => update('lifecycleIntegration', f)}
           rows={2}
-          placeholder="e.g. SailPoint pushes JML events to AD nightly; new hire access available within 24h of HR start date"
+          placeholder="SailPoint pushes JML to AD nightly; new hire <24h"
         />
       </Field>
-      <Field label="Source-of-truth mapping" required>
+      <Field label="Source of truth" required hint="Which system owns each attribute.">
         <UFInput
           field={spec.sourceOfTruthMapping}
           onChange={(f) => update('sourceOfTruthMapping', f)}
-          rows={3}
-          placeholder="e.g. employeeId — Workday; department — Workday; AD groups — SailPoint owns; LDAP — read-only mirror of AD"
+          rows={2}
+          placeholder="employeeId/dept — Workday; AD groups — SailPoint"
         />
       </Field>
-      <Field label="Federation boundaries" required>
+      <Field label="Federation" required>
         <UFInput
           field={spec.federationBoundaries}
           onChange={(f) => update('federationBoundaries', f)}
           rows={2}
-          placeholder="e.g. 3 AD forests; partner orgs federate via SAML; subsidiary in EMEA has its own SailPoint"
+          placeholder="3 AD forests; partners via SAML; EMEA has own SailPoint"
         />
       </Field>
     </div>
@@ -1003,7 +845,7 @@ function ComplianceBlock({
   spec: ComplianceSpec;
   uc: UseCase;
   allUseCases: UseCase[];
-  onChange: (next: ComplianceSpec) => void;
+  onChange: (n: ComplianceSpec) => void;
 }) {
   const update = <K extends keyof ComplianceSpec>(key: K, next: ComplianceSpec[K]) =>
     onChange({ ...spec, [key]: next });
@@ -1024,17 +866,14 @@ function ComplianceBlock({
 
   return (
     <div className="border border-[var(--color-border)] rounded-md p-4 mb-4">
-      <div className="mono text-[10px] tracking-widest text-[var(--color-text-muted)] mb-3">
-        COMPLIANCE SPECIFICS
-      </div>
       <Field
         label="Authorizers under audit"
         required
-        hint="Compliance / audit applies across all configured authorizers. Pick which ones are in scope for this audit use case."
+        hint="Audit applies across configured authorizers — pick which are in scope."
       >
         {candidates.length === 0 ? (
           <div className="text-[11.5px] text-[var(--color-text-dim)] py-2">
-            No other use cases with authorizers in this POC yet.
+            No other use cases with authorizers yet.
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -1063,101 +902,47 @@ function ComplianceBlock({
           </div>
         )}
       </Field>
-      <Field label="Regulation set" required hint="SOX, PCI-DSS, HIPAA, GDPR, CCPA, sector-specific.">
+      <Field label="Regulations" required>
         <UFInput
           field={spec.regulationSet}
           onChange={(f) => update('regulationSet', f)}
           rows={2}
-          placeholder="e.g. SOX (annual), PCI-DSS Level 1, NYDFS Part 500"
+          placeholder="SOX, PCI-DSS L1, NYDFS Part 500"
         />
       </Field>
-      <Field label="Existing audit pipeline" required>
+      <Field label="Audit pipeline" required hint="Where decisions go today.">
         <UFInput
           field={spec.existingAuditPipeline}
           onChange={(f) => update('existingAuditPipeline', f)}
-          rows={3}
-          placeholder="e.g. Decision logs ship to Splunk; quarterly access review via SailPoint; ad-hoc queries via SOC2 portal"
+          rows={2}
+          placeholder="Splunk ingest; quarterly review via SailPoint"
         />
       </Field>
-      <Field label="Retention requirements" required>
+      <Field label="Retention" required>
         <UFInput
           field={spec.retentionRequirements}
           onChange={(f) => update('retentionRequirements', f)}
-          placeholder="e.g. 7 years immutable (SOX); 1 year hot, 6 years warm (S3 Object Lock)"
+          placeholder="7 years immutable (SOX); 1y hot, 6y warm"
         />
       </Field>
       <Field
         label="Sample audit questions"
         required
-        hint="3–5 real questions auditors have asked. Concrete examples beat abstract requirements."
+        hint="3–5 real questions auditors have asked."
       >
         <UFInput
           field={spec.sampleAuditQuestions}
           onChange={(f) => update('sampleAuditQuestions', f)}
-          rows={5}
-          placeholder="e.g. ‘Show me every user who accessed Customer SSN data in Q3 and the policy that granted access’"
+          rows={4}
+          placeholder="Show every user who accessed SSN data in Q3 and the policy that granted access"
         />
       </Field>
-      <Field label="Reviewer personas" required>
+      <Field label="Reviewer personas" required hint="Who runs audits, with what tools.">
         <UFInput
           field={spec.reviewerPersonas}
           onChange={(f) => update('reviewerPersonas', f)}
           rows={2}
-          placeholder="e.g. Internal audit (uses Splunk + spreadsheets); external auditor (read-only PAP access); compliance officer (PAP with policy ownership)"
-        />
-      </Field>
-    </div>
-  );
-}
-
-// ============================================================
-// Universal block (always shown when category has a tech block)
-// ============================================================
-function UniversalBlock({
-  spec,
-  onChange,
-}: {
-  spec: TechnicalSpec;
-  onChange: (next: TechnicalSpec) => void;
-}) {
-  return (
-    <div className="border border-[var(--color-border)] rounded-md p-4 mb-4">
-      <div className="mono text-[10px] tracking-widest text-[var(--color-text-muted)] mb-3">
-        UNIVERSAL — IDENTITY & TEST USERS
-      </div>
-      <Field
-        label="JWT / OIDC token samples"
-        required
-        hint="Decoded JWT samples or links to token introspection. PlainID needs to see the actual claim shape."
-      >
-        <UrlList
-          entries={spec.jwtSampleUrls}
-          onChange={(next) => onChange({ ...spec, jwtSampleUrls: next })}
-          labelPlaceholder="e.g. Sample employee JWT (jwt.io)"
-        />
-      </Field>
-      <Field
-        label="Identity attribute catalog"
-        required
-        hint="Attributes available from IdP/AD/IGA, types, example values, refresh cadence."
-      >
-        <UFInput
-          field={spec.identityAttributeCatalog}
-          onChange={(f) => onChange({ ...spec, identityAttributeCatalog: f })}
-          rows={4}
-          placeholder="e.g. employeeId (string), department (string), groups (array), clearance (enum: L1-L5), region (string); refreshed on token issue (1h)"
-        />
-      </Field>
-      <Field
-        label="Test user accounts"
-        required
-        hint="Min 3-5 accounts representing different attribute combinations; provisioning owner; how PlainID gets access."
-      >
-        <UFInput
-          field={spec.testUserAccounts}
-          onChange={(f) => onChange({ ...spec, testUserAccounts: f })}
-          rows={4}
-          placeholder="e.g. 5 accounts in customer test IdP, 1 per persona; provisioned by IAM team; creds in shared 1Password vault"
+          placeholder="Internal audit (Splunk); external auditor (read-only PAP)"
         />
       </Field>
     </div>
@@ -1179,60 +964,43 @@ function UseCaseTechnicalCard({
   onUseCaseChange: (next: UseCase) => void;
 }) {
   if (!CATEGORY_HAS_TECH_BLOCK[uc.category]) {
-    // Category 'Other' has no tech block — just a placeholder note.
     return (
       <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 mb-3">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="mono text-[11px] text-[var(--color-text-dim)] tracking-widest">
-            UC{String(index + 1).padStart(2, '0')}
-          </span>
+        <div className="flex items-center gap-2 mb-1">
           <span className="text-[13px] font-medium">{uc.title || '(untitled)'}</span>
           <Pill>{uc.category.toUpperCase()}</Pill>
         </div>
         <div className="text-[12px] text-[var(--color-text-dim)]">
-          No technical spec block for category "Other". Reclassify the use case if technical
-          details are needed.
+          No technical spec for "Other" — reclassify if specs are needed.
         </div>
       </div>
     );
   }
 
-  // Ensure the use case has a tech spec (shouldn't happen post-migration, but defensively)
   const spec = uc.technicalSpec;
-  if (!spec) {
-    return null;
-  }
+  if (!spec) return null;
 
   const setSpec = (next: TechnicalSpec) =>
     onUseCaseChange({ ...uc, technicalSpec: next });
 
-  const isDownstreamCategory = DOWNSTREAM_AUTHORIZER_CATEGORIES.includes(uc.category);
-
   return (
     <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 mb-4">
       <header className="flex items-center gap-2 mb-4 pb-3 border-b border-[var(--color-border)]">
-        <span className="mono text-[11px] text-[var(--color-text-dim)] tracking-widest">
-          UC{String(index + 1).padStart(2, '0')}
-        </span>
         <span className="text-[14px] font-semibold">{uc.title || '(untitled)'}</span>
         <Pill tone="accent">{uc.category.toUpperCase()}</Pill>
       </header>
 
-      {!isDownstreamCategory && (
-        <AuthorizerBlock
-          uc={uc}
-          spec={spec.authorizer}
-          allUseCases={allUseCases}
-          onChange={(next) => setSpec({ ...spec, authorizer: next })}
-          onCopyFrom={(sourceId) => {
-            const source = allUseCases.find((u) => u.id === sourceId);
-            if (!source?.technicalSpec) return;
-            setSpec({ ...spec, authorizer: { ...source.technicalSpec.authorizer } });
-          }}
-        />
-      )}
-
-      <UniversalBlock spec={spec} onChange={setSpec} />
+      <AuthorizerBlock
+        uc={uc}
+        spec={spec.authorizer}
+        allUseCases={allUseCases}
+        onChange={(next) => setSpec({ ...spec, authorizer: next })}
+        onCopyFrom={(sourceId) => {
+          const source = allUseCases.find((u) => u.id === sourceId);
+          if (!source?.technicalSpec) return;
+          setSpec({ ...spec, authorizer: { ...source.technicalSpec.authorizer } });
+        }}
+      />
 
       {uc.category === 'Data' && spec.data && (
         <DataBlock spec={spec.data} onChange={(next) => setSpec({ ...spec, data: next })} />
@@ -1279,6 +1047,9 @@ export function TechnicalSection({ poc, set }: SectionProps) {
   const updateUseCase = (next: UseCase) =>
     set({ useCases: poc.useCases.map((u) => (u.id === next.id ? next : u)) });
 
+  const foundation = poc.technicalFoundation ?? emptyTechnicalFoundation();
+  const setFoundation = (next: TechnicalFoundation) => set({ technicalFoundation: next });
+
   const techUseCases = poc.useCases.filter((u) => CATEGORY_HAS_TECH_BLOCK[u.category]);
 
   return (
@@ -1286,19 +1057,21 @@ export function TechnicalSection({ poc, set }: SectionProps) {
       id="technical"
       number="06"
       title="Technical Foundation"
-      description="Authorizer selection plus the technical specifics PlainID needs to map identity, build policies, and integrate with target systems. Each use case gets its own authorizer config and category-specific block. Mark fields TBD when answers aren't yet known."
+      description="Authorizer config and the specs PlainID needs to integrate. Mark fields Unknown when answers aren't yet known."
       status={evaluateSection(poc, 'technical')}
     >
+      <UniversalFoundationBlock foundation={foundation} onChange={setFoundation} />
+
       {poc.useCases.length === 0 && (
         <EmptyState
           title="No use cases yet"
-          description="Add use cases in Section 05 first. Each use case gets a corresponding technical spec block here."
+          description="Add use cases in Section 05 first."
         />
       )}
       {poc.useCases.length > 0 && techUseCases.length === 0 && (
         <EmptyState
           title="No technical-spec use cases"
-          description="All use cases are categorized as 'Other'. Reclassify them to surface technical spec blocks."
+          description="All use cases are 'Other'. Reclassify to add technical specs."
         />
       )}
       {poc.useCases.map((uc, i) => (

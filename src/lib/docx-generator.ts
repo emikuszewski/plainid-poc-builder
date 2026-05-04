@@ -320,10 +320,24 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
   children.push(heading('Technical Foundation', HeadingLevel.HEADING_1));
   children.push(
     para(
-      'Authorizer selection and the technical specifics PlainID needs to map identity, build policies, and integrate with target systems. Each use case is shown with its own authorizer config and category-specific block.',
+      "Authorizer config and the specs PlainID needs to integrate. Identity context applies to every use case; per-use-case blocks cover authorizer-specific and category-specific details.",
       { size: 22 },
     ),
   );
+  // Universal block — once per POC
+  {
+    const tf = poc.technicalFoundation;
+    const rows: TableRow[] = [specTitleRow('Universal — Identity & Test Users')];
+    rows.push(specRow('JWT / OIDC Samples', urlEntriesParagraphs(tf?.jwtSampleUrls)));
+    rows.push(
+      specRow(
+        'Identity Attributes',
+        ufParagraphs(tf?.identityAttributeCatalog),
+      ),
+    );
+    rows.push(specRow('Test Users', ufParagraphs(tf?.testUserAccounts)));
+    pushTable(children, rows);
+  }
   const techUseCases = poc.useCases.filter((u) => CATEGORY_HAS_TECH_BLOCK[u.category]);
   if (techUseCases.length === 0) {
     children.push(para('No technical-spec use cases defined.', { size: 22 }));
@@ -680,7 +694,7 @@ function pushTechBlockForUseCase(
       spacing: { before: 240, after: 80 },
       children: [
         new TextRun({
-          text: `UC${String(idx + 1).padStart(2, '0')} · ${u.title || '(untitled)'}`,
+          text: u.title || '(untitled)',
           bold: true,
           size: 24,
           font: 'Calibri',
@@ -740,15 +754,6 @@ function pushTechBlockForUseCase(
     rows.push(specRow('Sample Request / Response', ufParagraphs(a.sampleRequestResponse)));
     rows.push(specRow('Authorizer Documentation', urlEntriesParagraphs(a.authorizerDocs)));
     rows.push(specRow('Open Items', ufParagraphs(a.openItems)));
-    pushTable(children, rows);
-  }
-
-  // ----- Universal block -----
-  {
-    const rows: TableRow[] = [specTitleRow('Universal — Identity & Test Users')];
-    rows.push(specRow('JWT / OIDC Samples', urlEntriesParagraphs(spec.jwtSampleUrls)));
-    rows.push(specRow('Identity Attribute Catalog', ufParagraphs(spec.identityAttributeCatalog)));
-    rows.push(specRow('Test User Accounts', ufParagraphs(spec.testUserAccounts)));
     pushTable(children, rows);
   }
 

@@ -140,6 +140,18 @@ export function renderHtml(poc: PocDocument, opts: { standalone?: boolean } = {}
   const techUseCases = poc.useCases.filter((u) => CATEGORY_HAS_TECH_BLOCK[u.category]);
   const technicalBlocks = techUseCases.map((u, i) => renderTechBlockForUseCase(u, i, poc.useCases)).join('');
 
+  // POC-level universal foundation rendered once at the top of Technical Foundation
+  const tf = poc.technicalFoundation;
+  const universalFoundationHtml = `
+    <table class="techspec">
+      <thead><tr><th colspan="2">Universal — Identity &amp; Test Users</th></tr></thead>
+      <tbody>
+        <tr><td class="lbl">JWT / OIDC Samples</td><td>${urlEntries(tf?.jwtSampleUrls)}</td></tr>
+        <tr><td class="lbl">Identity Attributes</td><td>${ufList(tf?.identityAttributeCatalog)}</td></tr>
+        <tr><td class="lbl">Test Users</td><td>${ufList(tf?.testUserAccounts)}</td></tr>
+      </tbody>
+    </table>`;
+
   const body = `
     <header class="cover">
       <div class="brand">PLAINID · THE AUTHORIZATION COMPANY</div>
@@ -200,7 +212,8 @@ export function renderHtml(poc: PocDocument, opts: { standalone?: boolean } = {}
 
     <section>
       <h2>Technical Foundation</h2>
-      <p>Authorizer selection and the technical specifics PlainID needs to map identity, build policies, and integrate with target systems. Each use case is shown with its own authorizer config and category-specific block.</p>
+      <p>Authorizer config and the specs PlainID needs to integrate. Identity context applies to every use case; per-use-case blocks cover authorizer-specific and category-specific details.</p>
+      ${universalFoundationHtml}
       ${technicalBlocks || '<p><em>No technical-spec use cases defined.</em></p>'}
     </section>
 
@@ -311,17 +324,6 @@ function renderTechBlockForUseCase(u: UseCase, idx: number, allUseCases: UseCase
         </tbody>
       </table>`;
   }
-
-  // Universal block
-  const universalHtml = `
-    <table class="techspec">
-      <thead><tr><th colspan="2">Universal — Identity &amp; Test Users</th></tr></thead>
-      <tbody>
-        <tr><td class="lbl">JWT / OIDC Samples</td><td>${urlEntries(spec.jwtSampleUrls)}</td></tr>
-        <tr><td class="lbl">Identity Attribute Catalog</td><td>${ufList(spec.identityAttributeCatalog)}</td></tr>
-        <tr><td class="lbl">Test User Accounts</td><td>${ufList(spec.testUserAccounts)}</td></tr>
-      </tbody>
-    </table>`;
 
   // Per-category block
   let categoryHtml = '';
@@ -450,9 +452,8 @@ function renderTechBlockForUseCase(u: UseCase, idx: number, allUseCases: UseCase
 
   return `
     <div class="techblock">
-      <h3>UC${String(idx + 1).padStart(2, '0')} · ${escape(u.title || '(untitled)')} <span class="cat">${escape(u.category)}</span></h3>
+      <h3>${escape(u.title || '(untitled)')} <span class="cat">${escape(u.category)}</span></h3>
       ${authorizerHtml}
-      ${universalHtml}
       ${categoryHtml}
     </div>`;
 }
