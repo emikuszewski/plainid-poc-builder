@@ -169,11 +169,18 @@ body {
   background: var(--color-border-focus);
 }
 
-/* Form base styles */
+/* Form base styles. The `input:not([type])` selector catches inputs without
+ * an explicit type attribute — they render as text inputs but `input[type="text"]`
+ * does NOT match them, so we need this explicit catch. */
 input[type="text"],
 input[type="email"],
 input[type="url"],
 input[type="date"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="password"],
+input:not([type]),
 textarea,
 select {
   background: var(--color-bg-input);
@@ -192,6 +199,11 @@ input[type="text"]:focus,
 input[type="email"]:focus,
 input[type="url"]:focus,
 input[type="date"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="password"]:focus,
+input:not([type]):focus,
 textarea:focus,
 select:focus {
   border-color: var(--color-border-focus);
