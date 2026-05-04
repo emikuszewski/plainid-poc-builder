@@ -48,7 +48,10 @@ const schema = a.schema({
       // Section 7: Use Cases (snapshotted from library)
       useCases: a.json(),
 
-      // Section 8: Dependencies
+      // Section 8: Technical Foundation — POC-level identity & test users
+      technicalFoundation: a.json(),
+
+      // Section 9: Dependencies
       customerResponsibilities: a.string(),
       plainidResponsibilities: a.string(),
       openItems: a.string(),

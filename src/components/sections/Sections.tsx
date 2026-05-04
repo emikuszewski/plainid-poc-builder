@@ -764,7 +764,15 @@ export function TrackerSection({ poc, set }: SectionProps) {
         </Button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-[12px] table-fixed">
+          <colgroup>
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '38%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '3%' }} />
+          </colgroup>
           <thead>
             <tr className="text-left text-[var(--color-text-dim)] mono text-[10px] tracking-widest">
               <th className="py-1.5 pr-2 font-medium">PHASE</th>
@@ -772,12 +780,12 @@ export function TrackerSection({ poc, set }: SectionProps) {
               <th className="py-1.5 pr-2 font-medium">RESPONSIBLE</th>
               <th className="py-1.5 pr-2 font-medium">STATUS</th>
               <th className="py-1.5 pr-2 font-medium">DUE</th>
-              <th className="w-8" />
+              <th />
             </tr>
           </thead>
           <tbody>
             {poc.tracker.map((t) => (
-              <tr key={t.id} className="border-t border-[var(--color-border)]">
+              <tr key={t.id} className="border-t border-[var(--color-border)] group">
                 <td className="py-1 pr-2">
                   <input
                     className="!h-7 !text-[12px]"
@@ -801,7 +809,7 @@ export function TrackerSection({ poc, set }: SectionProps) {
                 </td>
                 <td className="py-1 pr-2">
                   <select
-                    className="!h-7 !text-[12px]"
+                    className="!h-7 !text-[12px] !pr-7"
                     value={t.status}
                     onChange={(e) =>
                       update(t.id, { status: e.target.value as TrackerRow['status'] })
@@ -821,12 +829,13 @@ export function TrackerSection({ poc, set }: SectionProps) {
                     onChange={(e) => update(t.id, { dueDate: e.target.value })}
                   />
                 </td>
-                <td>
+                <td className="py-1 align-middle">
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => remove(t.id)}
-                    className="!h-7"
+                    className="!h-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                    aria-label="Remove row"
                   >
                     ×
                   </Button>

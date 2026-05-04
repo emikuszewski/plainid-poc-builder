@@ -6,6 +6,7 @@ import type {
   ComplianceSpec,
   DataSpec,
   IdentitySpec,
+  TechnicalFoundation,
   TechnicalSpec,
   UseCaseCategory,
   UrlEntry,
@@ -115,9 +116,6 @@ const emptyCompliance = (): ComplianceSpec => ({
 export function emptyTechnicalSpec(category: UseCaseCategory): TechnicalSpec {
   const spec: TechnicalSpec = {
     authorizer: emptyAuthorizer(category),
-    jwtSampleUrls: [],
-    identityAttributeCatalog: emptyUF(),
-    testUserAccounts: emptyUF(),
   };
 
   switch (category) {
@@ -147,21 +145,25 @@ export function emptyTechnicalSpec(category: UseCaseCategory): TechnicalSpec {
   return spec;
 }
 
+export function emptyTechnicalFoundation(): TechnicalFoundation {
+  return {
+    jwtSampleUrls: [],
+    identityAttributeCatalog: emptyUF(),
+    testUserAccounts: emptyUF(),
+  };
+}
+
 // When a use case's category changes mid-edit, we need to reshape its
-// technical spec. Keep authorizer + universal fields, swap the per-category
-// block, and reset authorizer if it doesn't belong to the new category.
+// technical spec. Keep authorizer, swap the per-category block, and reset
+// authorizer if it doesn't belong to the new category.
 export function reshapeTechnicalSpec(
   current: TechnicalSpec | undefined,
   newCategory: UseCaseCategory,
 ): TechnicalSpec {
   if (!current) return emptyTechnicalSpec(newCategory);
 
-  // Preserve universal fields
   const reshape: TechnicalSpec = {
     authorizer: current.authorizer,
-    jwtSampleUrls: current.jwtSampleUrls,
-    identityAttributeCatalog: current.identityAttributeCatalog,
-    testUserAccounts: current.testUserAccounts,
   };
 
   // If the current authorizer doesn't belong to the new category, reset it

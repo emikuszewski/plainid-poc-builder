@@ -80,6 +80,19 @@ export function evaluateSection(poc: PocDocument, sectionId: string): SectionSta
       );
       break;
     case 'technical':
+      // POC-level universal foundation — required regardless of use case count
+      check(
+        (poc.technicalFoundation?.jwtSampleUrls.length ?? 0) > 0,
+        'JWT samples missing (Universal)',
+      );
+      check(
+        ufSatisfied(poc.technicalFoundation?.identityAttributeCatalog),
+        'Identity attribute catalog missing (Universal)',
+      );
+      check(
+        ufSatisfied(poc.technicalFoundation?.testUserAccounts),
+        'Test user accounts not defined (Universal)',
+      );
       // Each use case with a tech block contributes its own checks.
       // Identity & Compliance are downstream — they don't get an authorizer
       // block but do need a downstream-authorizer selection.
@@ -116,11 +129,6 @@ function evaluateTechnicalForUseCase(
     check(false, `${label}: technical spec missing`);
     return;
   }
-
-  // Universal — required for every tech-block use case
-  check(spec.jwtSampleUrls.length > 0, `${label}: JWT samples missing`);
-  check(ufSatisfied(spec.identityAttributeCatalog), `${label}: identity attribute catalog missing`);
-  check(ufSatisfied(spec.testUserAccounts), `${label}: test user accounts not defined`);
 
   // Authorizer block — only for non-downstream categories
   if (!DOWNSTREAM_AUTHORIZER_CATEGORIES.includes(u.category)) {

@@ -9,6 +9,7 @@ import type {
   Persona,
   TeamMember,
   UseCase,
+  TechnicalFoundation,
   TrackerRow,
   ReferenceDoc,
 } from '../types';
@@ -64,6 +65,9 @@ export function fromRecord(r: any): PocDocument {
     teamMembers: parseJson<TeamMember[]>(r.teamMembers, []),
 
     useCases: parseJson<UseCase[]>(r.useCases, []),
+    technicalFoundation: r.technicalFoundation
+      ? parseJson<TechnicalFoundation>(r.technicalFoundation, undefined as any)
+      : undefined,
 
     customerResponsibilities: r.customerResponsibilities ?? '',
     plainidResponsibilities: r.plainidResponsibilities ?? '',
@@ -103,6 +107,9 @@ export function toRecord(p: PocDocument) {
     teamMembers: JSON.stringify(p.teamMembers),
 
     useCases: JSON.stringify(p.useCases),
+    technicalFoundation: p.technicalFoundation
+      ? JSON.stringify(p.technicalFoundation)
+      : null,
 
     customerResponsibilities: p.customerResponsibilities,
     plainidResponsibilities: p.plainidResponsibilities,

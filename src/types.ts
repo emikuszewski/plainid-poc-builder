@@ -94,13 +94,12 @@ export interface AuthorizerSpec {
 
 // Category-specific technical detail. Only one of the per-category blocks
 // will be populated based on the use case's category.
+//
+// Note: universal identity/test-user fields (JWT samples, identity attribute
+// catalog, test user accounts) live on PocDocument as `technicalFoundation`,
+// not here — they apply once across the whole POC.
 export interface TechnicalSpec {
   authorizer: AuthorizerSpec;
-
-  // Universal — applies regardless of category
-  jwtSampleUrls: UrlEntry[]; // sample decoded JWT, payload structure
-  identityAttributeCatalog: UnknownableField;
-  testUserAccounts: UnknownableField;
 
   // Per-category blocks. Each is independently populated when the use case
   // matches the category. Stored together for simplicity.
@@ -110,6 +109,13 @@ export interface TechnicalSpec {
   application?: ApplicationSpec;
   identity?: IdentitySpec;
   compliance?: ComplianceSpec;
+}
+
+// POC-level universal foundation. Filled once and applies to every use case.
+export interface TechnicalFoundation {
+  jwtSampleUrls: UrlEntry[];
+  identityAttributeCatalog: UnknownableField;
+  testUserAccounts: UnknownableField;
 }
 
 export interface DataSpec {
@@ -244,7 +250,13 @@ export interface PocDocument {
   // Section 7: Use Cases
   useCases: UseCase[];
 
-  // Section 8: Dependencies & Pre-reqs
+  // Section 8: Technical Foundation — POC-level universal fields that apply
+  // to every use case (JWT structure, identity attributes, test users).
+  // Optional for backwards compatibility with POCs created before this field
+  // existed; the editor lazily creates it when first viewed.
+  technicalFoundation?: TechnicalFoundation;
+
+  // Section 9: Dependencies & Pre-reqs
   customerResponsibilities: string; // multiline
   plainidResponsibilities: string; // multiline
   openItems: string; // multiline
