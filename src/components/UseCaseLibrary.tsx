@@ -85,13 +85,31 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm('Delete this library entry? POCs that already inserted it are unaffected.')) return;
+  // Delete state — type-to-confirm modal. Seeded entries are protected
+  // (button is hidden), so this only ever holds custom entries.
+  const [deleting, setDeleting] = useState<UseCaseLibraryEntry | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  function openDelete(entry: UseCaseLibraryEntry) {
+    setDeleting(entry);
+    setDeleteConfirmText('');
+  }
+
+  async function confirmDelete() {
+    if (!deleting?.id) return;
+    if (deleteConfirmText.trim() !== deleting.title.trim()) return;
+    setBusy(true);
     try {
-      await deleteLibraryEntry(id);
-      refresh();
+      await deleteLibraryEntry(deleting.id);
+      // Drop from selection if it was selected
+      setSelection((prev) => prev.filter((x) => x !== deleting.id));
+      setDeleting(null);
+      setDeleteConfirmText('');
+      await refresh();
     } catch (e: any) {
       alert(`Delete failed: ${e?.message ?? e}`);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -310,17 +328,25 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
                           >
                             Edit
                           </Button>
-                          {e.id && (
+                          {e.id && !e.isSystem && (
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={(ev) => {
                                 ev.stopPropagation();
-                                remove(e.id!);
+                                openDelete(e);
                               }}
                             >
                               Delete
                             </Button>
+                          )}
+                          {e.isSystem && (
+                            <span
+                              className="mono text-[10px] tracking-widest text-[var(--color-text-faint)]"
+                              title="Built-in templates can't be deleted"
+                            >
+                              PROTECTED
+                            </span>
                           )}
                         </div>
                       </div>
@@ -517,6 +543,63 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
             <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-[var(--color-border)]">
               <Button variant="ghost" onClick={() => setUseModalOpen(false)}>
                 Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete confirmation — type-to-confirm to make the action deliberate */}
+      <Modal
+        open={!!deleting}
+        onClose={() => {
+          setDeleting(null);
+          setDeleteConfirmText('');
+        }}
+        title="Delete template"
+        width={520}
+      >
+        {deleting && (
+          <div>
+            <p className="text-[12.5px] text-[var(--color-text-muted)] leading-relaxed mb-4">
+              You're about to delete{' '}
+              <strong className="text-[var(--color-text)]">{deleting.title}</strong>. POCs that
+              already inserted this template are unaffected — they hold their own snapshot.
+            </p>
+            <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 mb-4">
+              <p className="text-[11.5px] text-[var(--color-danger)] leading-relaxed">
+                This is permanent and shared across the team. The template will no longer be
+                available for anyone to insert into a new POC.
+              </p>
+            </div>
+            <Field
+              label={`Type the template name to confirm: ${deleting.title}`}
+              required
+            >
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={deleting.title}
+                autoFocus
+              />
+            </Field>
+            <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-[var(--color-border)]">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setDeleting(null);
+                  setDeleteConfirmText('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={confirmDelete}
+                disabled={busy || deleteConfirmText.trim() !== deleting.title.trim()}
+              >
+                {busy ? 'Deleting…' : 'Delete template'}
               </Button>
             </div>
           </div>
