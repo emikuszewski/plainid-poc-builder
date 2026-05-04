@@ -11,8 +11,8 @@
 @theme {
   --color-bg: #0a0a0a;
   --color-bg-elevated: #111111;
-  --color-bg-hover: #161616;
-  --color-bg-input: #0d0d0d;
+  --color-bg-input: #1a1a1a;
+  --color-bg-hover: #232323;
   --color-border: #1f1f1f;
   --color-border-strong: #2a2a2a;
   --color-border-focus: #404040;
@@ -41,12 +41,15 @@
 }
 
 /* Dark (default) — explicit so toggling between themes is a clean swap */
+/* Dark theme — surface ramp: page → card → input → hover, brightening at each step.
+ * Inputs sit *lighter* than their container in dark mode (modern dark UI convention)
+ * so they read as a slot you can interact with. */
 :root,
 [data-theme="dark"] {
   --color-bg: #0a0a0a;
   --color-bg-elevated: #111111;
-  --color-bg-hover: #161616;
-  --color-bg-input: #0d0d0d;
+  --color-bg-input: #1a1a1a;
+  --color-bg-hover: #232323;
   --color-border: #1f1f1f;
   --color-border-strong: #2a2a2a;
   --color-border-focus: #404040;
@@ -69,12 +72,15 @@
 }
 
 /* Light theme — same shape, inverted lightness, accent shifted slightly darker
- * so it has enough contrast against white backgrounds. */
+ * so it has enough contrast against white backgrounds.
+ * Surface ramp: page (white) → card (off-white) → input (gray) → hover (darker gray).
+ * Inputs sit *darker* than their container in light mode so they read as a slot,
+ * not a cutout. */
 [data-theme="light"] {
   --color-bg: #ffffff;
   --color-bg-elevated: #fafafa;
-  --color-bg-hover: #f4f4f4;
-  --color-bg-input: #ffffff;
+  --color-bg-hover: #ebebeb;
+  --color-bg-input: #f1f1f1;
   --color-border: #e5e5e5;
   --color-border-strong: #d4d4d4;
   --color-border-focus: #a3a3a3;
