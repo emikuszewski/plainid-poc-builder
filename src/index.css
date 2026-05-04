@@ -10,12 +10,12 @@
  */
 @theme {
   --color-bg: #0a0a0a;
-  --color-bg-elevated: #111111;
-  --color-bg-input: #1a1a1a;
-  --color-bg-hover: #232323;
-  --color-border: #1f1f1f;
-  --color-border-strong: #2a2a2a;
-  --color-border-focus: #404040;
+  --color-bg-elevated: #141414;
+  --color-bg-input: #0a0a0a;
+  --color-bg-hover: #1d1d1d;
+  --color-border: #2a2a2a;
+  --color-border-strong: #3d3d3d;
+  --color-border-focus: #525252;
   --color-text: #f5f5f5;
   --color-text-muted: #a3a3a3;
   --color-text-dim: #525252;
@@ -41,18 +41,17 @@
 }
 
 /* Dark (default) — explicit so toggling between themes is a clean swap */
-/* Dark theme — surface ramp: page → card → input → hover, brightening at each step.
- * Inputs sit *lighter* than their container in dark mode (modern dark UI convention)
- * so they read as a slot you can interact with. */
+/* Dark theme — inputs match page bg (a common modern convention), cards
+ * sit lighter, borders are visibly distinct so input boundaries always read. */
 :root,
 [data-theme="dark"] {
   --color-bg: #0a0a0a;
-  --color-bg-elevated: #111111;
-  --color-bg-input: #1a1a1a;
-  --color-bg-hover: #232323;
-  --color-border: #1f1f1f;
-  --color-border-strong: #2a2a2a;
-  --color-border-focus: #404040;
+  --color-bg-elevated: #141414;
+  --color-bg-input: #0a0a0a;
+  --color-bg-hover: #1d1d1d;
+  --color-border: #2a2a2a;
+  --color-border-strong: #3d3d3d;
+  --color-border-focus: #525252;
   --color-text: #f5f5f5;
   --color-text-muted: #a3a3a3;
   --color-text-dim: #525252;
@@ -71,19 +70,17 @@
   color-scheme: dark;
 }
 
-/* Light theme — same shape, inverted lightness, accent shifted slightly darker
- * so it has enough contrast against white backgrounds.
- * Surface ramp: page (white) → card (off-white) → input (gray) → hover (darker gray).
- * Inputs sit *darker* than their container in light mode so they read as a slot,
- * not a cutout. */
+/* Light theme — GitHub/Slack convention: cards have a subtle gray fill, inputs
+ * are pure white, borders are clearly visible at rest. Text + border do the
+ * work of making inputs feel like editable slots even when fill matches page. */
 [data-theme="light"] {
   --color-bg: #ffffff;
-  --color-bg-elevated: #fafafa;
+  --color-bg-elevated: #f4f4f4;
   --color-bg-hover: #ebebeb;
-  --color-bg-input: #f1f1f1;
-  --color-border: #e5e5e5;
-  --color-border-strong: #d4d4d4;
-  --color-border-focus: #a3a3a3;
+  --color-bg-input: #ffffff;
+  --color-border: #d4d4d4;
+  --color-border-strong: #a3a3a3;
+  --color-border-focus: #525252;
   --color-text: #0a0a0a;
   --color-text-muted: #525252;
   --color-text-dim: #737373;
