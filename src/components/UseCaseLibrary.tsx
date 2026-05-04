@@ -46,8 +46,10 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
   const [editing, setEditing] = useState<UseCaseLibraryEntry | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // "Use this template" picker state
-  const [usingEntry, setUsingEntry] = useState<UseCaseLibraryEntry | null>(null);
+  // Multi-select state — selected entry ids in selection order.
+  // The "Use" modal acts on whatever is currently selected.
+  const [selection, setSelection] = useState<string[]>([]);
+  const [useModalOpen, setUseModalOpen] = useState(false);
   const [myPocs, setMyPocs] = useState<PocDocument[] | null>(null);
   const [pocsLoading, setPocsLoading] = useState(false);
 
@@ -93,10 +95,24 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
     }
   }
 
-  // Open the "Use this template" picker. Loads the user's editable POCs
-  // lazily — list call only fires when they click Use.
-  async function openUsePicker(entry: UseCaseLibraryEntry) {
-    setUsingEntry(entry);
+  // Resolve selected ids → entries in selection order, dropping any that
+  // disappeared (e.g. deleted while modal is open).
+  function selectedEntries(): UseCaseLibraryEntry[] {
+    const byId = new Map((entries ?? []).map((e) => [e.id ?? '', e]));
+    return selection.map((id) => byId.get(id)).filter((e): e is UseCaseLibraryEntry => !!e);
+  }
+
+  function toggleSelection(id: string) {
+    setSelection((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  // Open the multi-template modal. Loads the user's editable POCs lazily —
+  // list call only fires when they trigger a flow.
+  async function openUseModal() {
+    if (selection.length === 0) return;
+    setUseModalOpen(true);
     if (myPocs === null) {
       setPocsLoading(true);
       try {
@@ -111,31 +127,38 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
     }
   }
 
-  function startNewPocFromTemplate() {
-    if (!usingEntry?.id) return;
-    nav(`/poc/new?useCase=${encodeURIComponent(usingEntry.id)}`);
-    setUsingEntry(null);
+  function startNewPocFromTemplates() {
+    const ids = selectedEntries()
+      .map((e) => e.id)
+      .filter((id): id is string => !!id);
+    if (ids.length === 0) return;
+    // Reuse the existing useCase= URL param contract by passing comma-separated ids.
+    nav(`/poc/new?useCase=${encodeURIComponent(ids.join(','))}`);
+    setUseModalOpen(false);
+    setSelection([]);
   }
 
-  async function addToExistingPoc(pocId: string) {
-    if (!usingEntry || !pocId) return;
+  async function addSelectedToPoc(pocId: string) {
+    const picks = selectedEntries();
+    if (picks.length === 0 || !pocId) return;
     const target = (myPocs ?? []).find((p) => p.id === pocId);
     if (!target) return;
     setBusy(true);
     try {
-      const newCase: UseCase = {
+      const newCases: UseCase[] = picks.map((entry) => ({
         id: uid(),
-        libraryId: usingEntry.id ?? null,
-        title: usingEntry.title,
-        category: usingEntry.category,
-        persona: usingEntry.persona,
-        objectives: usingEntry.objectives,
-        successCriteria: usingEntry.successCriteria,
-        technicalSpec: emptyTechnicalSpec(usingEntry.category),
-      };
-      const updated: PocDocument = { ...target, useCases: [...target.useCases, newCase] };
+        libraryId: entry.id ?? null,
+        title: entry.title,
+        category: entry.category,
+        persona: entry.persona,
+        objectives: entry.objectives,
+        successCriteria: entry.successCriteria,
+        technicalSpec: emptyTechnicalSpec(entry.category),
+      }));
+      const updated: PocDocument = { ...target, useCases: [...target.useCases, ...newCases] };
       await updatePoc(pocId, updated);
-      setUsingEntry(null);
+      setUseModalOpen(false);
+      setSelection([]);
       nav(`/poc/${pocId}`);
     } catch (e: any) {
       alert(`Could not add to POC: ${e?.message ?? e}`);
@@ -152,7 +175,7 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
   });
 
   return (
-    <div className="max-w-[1200px] mx-auto px-6 py-8">
+    <div className="max-w-[1200px] mx-auto px-6 py-8 pb-24">
       <header className="flex items-end justify-between mb-8">
         <div>
           <div className="mono text-[11px] text-[var(--color-text-dim)] tracking-widest mb-1">
@@ -217,38 +240,93 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
                 {category.toUpperCase()} · {items.length}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {items.map((e) => (
-                  <div
-                    key={e.id}
-                    className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-strong)] transition-colors"
-                  >
-                    <div className="flex items-start gap-2 mb-2">
-                      <h3 className="text-[13px] font-medium flex-1">{e.title}</h3>
-                      {e.isSystem && <Pill tone="accent">SEEDED</Pill>}
+                {items.map((e) => {
+                  const selected = !!e.id && selection.includes(e.id);
+                  const order = e.id ? selection.indexOf(e.id) : -1;
+                  return (
+                    <div
+                      key={e.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => e.id && toggleSelection(e.id)}
+                      onKeyDown={(ev) => {
+                        if ((ev.key === 'Enter' || ev.key === ' ') && e.id) {
+                          ev.preventDefault();
+                          toggleSelection(e.id);
+                        }
+                      }}
+                      className={`cursor-pointer rounded-lg p-4 transition-colors flex gap-3 items-start border ${
+                        selected
+                          ? 'bg-[var(--color-pill-accent-bg)] border-[var(--color-pill-accent-border)]'
+                          : 'bg-[var(--color-bg-elevated)] border-[var(--color-border)] hover:border-[var(--color-border-strong)]'
+                      }`}
+                    >
+                      <div
+                        className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                          selected
+                            ? 'bg-[var(--color-accent)] border-[var(--color-accent)]'
+                            : 'border-[var(--color-border-strong)]'
+                        }`}
+                        aria-hidden
+                      >
+                        {selected && (
+                          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                            <path
+                              d="M2 6l3 3 5-6"
+                              stroke="var(--color-bg)"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2 mb-2">
+                          <h3 className="text-[13px] font-medium flex-1">{e.title}</h3>
+                          {selected && order >= 0 && (
+                            <span className="mono text-[10px] tracking-widest text-[var(--color-accent)]">
+                              #{order + 1}
+                            </span>
+                          )}
+                          {e.isSystem && <Pill tone="accent">SEEDED</Pill>}
+                        </div>
+                        <div className="mono text-[10px] tracking-wider text-[var(--color-text-dim)] mb-2">
+                          {e.persona}
+                        </div>
+                        <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed mb-3">
+                          {e.description || (
+                            <span className="text-[var(--color-text-faint)]">No description.</span>
+                          )}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              setEditing(e);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          {e.id && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                remove(e.id!);
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="mono text-[10px] tracking-wider text-[var(--color-text-dim)] mb-2">
-                      {e.persona}
-                    </div>
-                    <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed mb-3">
-                      {e.description || (
-                        <span className="text-[var(--color-text-faint)]">No description.</span>
-                      )}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="primary" onClick={() => openUsePicker(e)}>
-                        Use →
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>
-                        Edit
-                      </Button>
-                      {e.id && (
-                        <Button size="sm" variant="ghost" onClick={() => remove(e.id!)}>
-                          Delete
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -330,35 +408,68 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
       </Modal>
 
       <Modal
-        open={!!usingEntry}
-        onClose={() => setUsingEntry(null)}
-        title={usingEntry ? `Use template: ${usingEntry.title}` : 'Use template'}
+        open={useModalOpen}
+        onClose={() => setUseModalOpen(false)}
+        title={
+          selection.length === 1
+            ? `Use template: ${selectedEntries()[0]?.title ?? ''}`
+            : `Use ${selection.length} templates`
+        }
         width={560}
       >
-        {usingEntry && (
+        {useModalOpen && (
           <div>
-            <p className="text-[12.5px] text-[var(--color-text-muted)] mb-5 leading-relaxed">
-              The template will be copied into the POC and you can customize it from there.
-              Subsequent edits to this template won't affect POCs that already used it.
+            <p className="text-[12.5px] text-[var(--color-text-muted)] mb-4 leading-relaxed">
+              {selection.length === 1
+                ? "The template will be copied into the POC and you can customize it from there. Subsequent edits to this template won't affect POCs that already used it."
+                : `${selection.length} templates will be copied into the POC in selection order. Subsequent edits to these templates won't affect POCs that already used them.`}
             </p>
+
+            {selection.length > 1 && (
+              <div className="mb-5 border border-[var(--color-border)] rounded-md p-2.5 bg-[var(--color-bg)]">
+                <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-1.5">
+                  SELECTED · IN ORDER
+                </div>
+                <ol className="space-y-0.5">
+                  {selectedEntries().map((e, i) => (
+                    <li
+                      key={e.id}
+                      className="flex items-baseline gap-2 text-[12px] text-[var(--color-text)]"
+                    >
+                      <span className="mono text-[10px] text-[var(--color-text-dim)] w-5">
+                        #{i + 1}
+                      </span>
+                      <span className="flex-1 truncate">{e.title}</span>
+                      <span className="mono text-[9px] tracking-widest text-[var(--color-text-dim)]">
+                        {e.category.toUpperCase()}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
 
             <div className="mb-5">
               <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-2">
                 START FRESH
               </div>
               <button
-                onClick={startNewPocFromTemplate}
+                onClick={startNewPocFromTemplates}
                 disabled={busy}
                 className="w-full text-left bg-[var(--color-bg)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] hover:border-[var(--color-accent)] rounded-md p-3 transition-colors disabled:opacity-50"
               >
                 <div className="flex items-center gap-2">
                   <span className="text-[13px] font-medium text-[var(--color-text)]">
-                    Start new POC with this template
+                    {selection.length === 1
+                      ? 'Start new POC with this template'
+                      : `Start new POC with ${selection.length} templates`}
                   </span>
                   <span className="ml-auto text-[var(--color-accent)] text-[14px]">→</span>
                 </div>
                 <div className="text-[11.5px] text-[var(--color-text-muted)] mt-1">
-                  Creates a blank POC pre-loaded with this use case
+                  {selection.length === 1
+                    ? 'Creates a blank POC pre-loaded with this use case'
+                    : `Creates a blank POC pre-loaded with ${selection.length} use cases`}
                 </div>
               </button>
             </div>
@@ -383,7 +494,7 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
                     .map((p) => (
                       <button
                         key={p.id}
-                        onClick={() => p.id && addToExistingPoc(p.id)}
+                        onClick={() => p.id && addSelectedToPoc(p.id)}
                         disabled={busy}
                         className="w-full text-left bg-[var(--color-bg)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] hover:border-[var(--color-border-strong)] rounded-md px-3 py-2 transition-colors disabled:opacity-50 flex items-center gap-2"
                       >
@@ -404,13 +515,35 @@ export function UseCaseLibrary({ currentUserEmail }: { currentUserEmail: string 
             </div>
 
             <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-[var(--color-border)]">
-              <Button variant="ghost" onClick={() => setUsingEntry(null)}>
+              <Button variant="ghost" onClick={() => setUseModalOpen(false)}>
                 Cancel
               </Button>
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Sticky action bar — shown when ≥1 template selected */}
+      {selection.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-[var(--color-bg-elevated)] border-t border-[var(--color-border)] shadow-lg">
+          <div className="max-w-[1200px] mx-auto px-6 py-3 flex items-center gap-3">
+            <span className="mono text-[11px] tracking-widest text-[var(--color-accent)]">
+              {selection.length} {selection.length === 1 ? 'TEMPLATE' : 'TEMPLATES'} SELECTED
+            </span>
+            <span className="text-[11.5px] text-[var(--color-text-muted)]">
+              · will insert in selection order
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setSelection([])}>
+                Clear
+              </Button>
+              <Button size="sm" variant="primary" onClick={openUseModal}>
+                Use {selection.length === 1 ? 'template' : 'templates'} →
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

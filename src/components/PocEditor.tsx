@@ -85,14 +85,18 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
     })();
   }, []);
 
-  // If the new POC was launched from a library card (URL has ?useCase=<id>),
-  // pre-load that use case into the empty POC. Runs once when both poc and
-  // library are ready, then strips the query param so it doesn't re-fire.
+  // If the new POC was launched from library cards (URL has ?useCase=<id>
+  // or ?useCase=<id1>,<id2>,<id3>), pre-load those use cases into the empty
+  // POC. Runs once when both poc and library are ready, then strips the
+  // query param so it doesn't re-fire.
   useEffect(() => {
     if (!isNew || !poc || poc.useCases.length > 0 || !seedUseCaseId || library.length === 0) return;
-    const entry = library.find((e) => e.id === seedUseCaseId);
-    if (!entry) {
-      // Library entry was deleted between picker click and editor load — silent fail
+    const ids = seedUseCaseId.split(',').map((s) => s.trim()).filter(Boolean);
+    const entries = ids
+      .map((id) => library.find((e) => e.id === id))
+      .filter((e): e is NonNullable<typeof e> => !!e);
+    if (entries.length === 0) {
+      // All library entries were deleted between picker click and editor load
       setSearchParams({}, { replace: true });
       return;
     }
@@ -100,18 +104,16 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
       prev
         ? {
             ...prev,
-            useCases: [
-              {
-                id: uid(),
-                libraryId: entry.id ?? null,
-                title: entry.title,
-                category: entry.category,
-                persona: entry.persona,
-                objectives: entry.objectives,
-                successCriteria: entry.successCriteria,
-                technicalSpec: emptyTechnicalSpec(entry.category),
-              },
-            ],
+            useCases: entries.map((entry) => ({
+              id: uid(),
+              libraryId: entry.id ?? null,
+              title: entry.title,
+              category: entry.category,
+              persona: entry.persona,
+              objectives: entry.objectives,
+              successCriteria: entry.successCriteria,
+              technicalSpec: emptyTechnicalSpec(entry.category),
+            })),
           }
         : prev,
     );
