@@ -86,7 +86,7 @@ export default function App() {
                     color: 'var(--color-text-muted)',
                   }}
                 >
-                  PLAINID · POC BUILDER
+                  POCKET — YOUR POC KIT
                 </div>
                 <div
                   style={{

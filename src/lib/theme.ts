@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 
 export type Theme = 'dark' | 'light';
 
-const STORAGE_KEY = 'plainid-poc-builder:theme';
+const STORAGE_KEY = 'pocket:theme';
 
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'dark';
