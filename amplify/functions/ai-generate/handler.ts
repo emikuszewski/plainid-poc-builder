@@ -12,7 +12,7 @@ import type { Schema } from '../../data/resource';
 
 const REGION = process.env.BEDROCK_REGION ?? 'us-east-1';
 const MODEL_ID =
-  process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
+  process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-sonnet-4-6';
 
 // Cap output size as a safety belt — caller can request less but never more.
 const HARD_MAX_TOKENS = 4096;
