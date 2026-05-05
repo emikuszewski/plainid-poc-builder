@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Modal, Pill, Field } from './ui/Primitives';
+import { AiButton } from './ui/AiButton';
 import {
   CustomerSection,
   ContextSection,
@@ -27,6 +28,8 @@ import { downloadDocx, downloadHtml } from '../lib/docx-generator';
 import { renderHtml } from '../lib/html-generator';
 import { SECTIONS } from '../types';
 import type { PocDocument, UseCaseLibraryEntry, UseCaseCategory } from '../types';
+import { generate } from '../lib/ai';
+import { buildReviewPocPrompt, parseReview, type ReviewResult } from '../lib/ai-prompts';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -196,6 +199,44 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
     downloadHtml(poc, renderHtml(poc, { standalone: true }));
   }
 
+  // ---- AI: Review POC ----
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [review, setReview] = useState<ReviewResult | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  async function runReview() {
+    if (!poc) return;
+    setReviewing(true);
+    setReviewError(null);
+    setReview(null);
+    try {
+      const built = buildReviewPocPrompt(poc);
+      const result = await generate({
+        prompt: built.prompt,
+        system: built.system,
+        maxTokens: built.maxTokens,
+        feature: 'review-poc',
+        pocId: poc.id,
+      });
+      const parsed = parseReview(result.text);
+      if (!parsed) {
+        setReviewError('AI returned a response in an unexpected format. Please try again.');
+      } else {
+        setReview(parsed);
+      }
+    } catch (err: any) {
+      setReviewError(err?.message ?? 'Review failed');
+    } finally {
+      setReviewing(false);
+    }
+  }
+
+  function openReview() {
+    setReviewModalOpen(true);
+    void runReview();
+  }
+
   function insertSelectedFromLibrary() {
     if (!poc || pickerSelection.length === 0) return;
     // Build use cases in selection order (matches user's pick order)
@@ -360,6 +401,12 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
             <Button size="sm" onClick={() => poc.id && nav(`/poc/${poc.id}/preview`)} disabled={!poc.id}>
               Preview
             </Button>
+            <AiButton
+              label="Review"
+              onRun={openReview}
+              loading={reviewing}
+              title="Run an AI quality review of this POC document"
+            />
             <Button size="sm" variant="ghost" onClick={exportHtml}>
               HTML
             </Button>
@@ -497,6 +544,124 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
               Add {pickerSelection.length || ''} →
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* AI: Review POC modal */}
+      <Modal
+        open={reviewModalOpen}
+        onClose={() => {
+          setReviewModalOpen(false);
+          setReview(null);
+          setReviewError(null);
+        }}
+        title="POC Review"
+        width={760}
+      >
+        <p className="text-[12.5px] text-[var(--color-text-muted)] mb-4 leading-relaxed">
+          AI quality review of this POC. Findings are organized by severity. Use these as
+          prompts for your own judgment — the SE owns the document.
+        </p>
+
+        {reviewing && (
+          <div className="text-[12.5px] text-[var(--color-text-muted)] py-8 text-center">
+            Reviewing the document… this typically takes 10–25 seconds.
+          </div>
+        )}
+
+        {reviewError && !reviewing && (
+          <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 mb-4">
+            <p className="text-[12px] text-[var(--color-danger)]">{reviewError}</p>
+            <Button size="sm" variant="ghost" onClick={runReview} className="mt-2">
+              Try again
+            </Button>
+          </div>
+        )}
+
+        {!reviewing && review && (
+          <div className="space-y-5">
+            <div>
+              <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-1.5">
+                SUMMARY
+              </div>
+              <p className="text-[13px] text-[var(--color-text)] leading-relaxed">
+                {review.summary}
+              </p>
+            </div>
+
+            {review.issues.length > 0 && (
+              <div>
+                <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-2">
+                  ISSUES · {review.issues.length}
+                </div>
+                <div className="space-y-2">
+                  {review.issues.map((issue, i) => {
+                    const tone =
+                      issue.severity === 'critical'
+                        ? 'danger'
+                        : issue.severity === 'warning'
+                          ? 'warning'
+                          : 'neutral';
+                    return (
+                      <div
+                        key={i}
+                        className="border border-[var(--color-border)] rounded-md p-3 bg-[var(--color-bg)]"
+                      >
+                        <div className="flex items-baseline gap-2 mb-1.5 flex-wrap">
+                          <Pill tone={tone}>{issue.severity.toUpperCase()}</Pill>
+                          {issue.section && (
+                            <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
+                              {issue.section.toUpperCase()}
+                            </span>
+                          )}
+                          <span className="text-[13px] font-medium text-[var(--color-text)]">
+                            {issue.title}
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
+                          {issue.detail}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {review.strengths.length > 0 && (
+              <div>
+                <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-2">
+                  STRENGTHS · {review.strengths.length}
+                </div>
+                <ul className="space-y-1">
+                  {review.strengths.map((s, i) => (
+                    <li
+                      key={i}
+                      className="text-[12.5px] text-[var(--color-text-muted)] leading-relaxed flex gap-2"
+                    >
+                      <span className="text-[var(--color-accent)] mt-0.5">✓</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-[var(--color-border)]">
+          <Button variant="ghost" onClick={runReview} disabled={reviewing}>
+            Re-run
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setReviewModalOpen(false);
+              setReview(null);
+            }}
+          >
+            Close
+          </Button>
         </div>
       </Modal>
     </div>

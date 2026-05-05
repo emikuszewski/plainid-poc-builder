@@ -47,15 +47,20 @@ interface FieldProps {
   required?: boolean;
   children: React.ReactNode;
   className?: string;
+  /** Optional inline action rendered on the right of the label row — e.g. an AI Suggest button. */
+  action?: React.ReactNode;
 }
 
-export function Field({ label, hint, required, children, className = '' }: FieldProps) {
+export function Field({ label, hint, required, children, className = '', action }: FieldProps) {
   return (
     <div className={`mb-4 ${className}`}>
-      <label className="flex items-center gap-1.5">
-        <span>{label}</span>
-        {required && <span className="text-[var(--color-accent)]">·</span>}
-      </label>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <label className="flex items-center gap-1.5 mb-0">
+          <span>{label}</span>
+          {required && <span className="text-[var(--color-accent)]">·</span>}
+        </label>
+        {action && <span className="flex-shrink-0">{action}</span>}
+      </div>
       {children}
       {hint && (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] leading-snug">{hint}</div>

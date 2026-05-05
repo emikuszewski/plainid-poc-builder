@@ -12,8 +12,11 @@ import type {
   UseCaseLibraryEntry,
 } from '../../types';
 import { Field, Button, SectionCard, Pill, EmptyState, Modal } from '../ui/Primitives';
+import { AiButton } from '../ui/AiButton';
 import { evaluateSection } from '../../lib/completeness';
 import { emptyTechnicalSpec, reshapeTechnicalSpec } from '../../lib/technical-spec';
+import { generate } from '../../lib/ai';
+import { buildFieldSuggestPrompt, FIELD_PROMPTS } from '../../lib/ai-prompts';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -27,10 +30,45 @@ interface SectionProps {
 
 const status = (poc: PocDocument, id: string) => evaluateSection(poc, id);
 
+/**
+ * Hook for a field's "✨ Suggest" button. Returns a render-ready AiButton
+ * component plus a loading flag. The button calls aiGenerate with the
+ * field's prompt template and writes the result into the named field.
+ */
+function useFieldSuggest(
+  fieldKey: keyof typeof FIELD_PROMPTS,
+  poc: PocDocument,
+  set: (patch: Partial<PocDocument>) => void,
+  pocId?: string,
+) {
+  const [loading, setLoading] = useState(false);
+  const onRun = async () => {
+    const built = buildFieldSuggestPrompt(fieldKey, poc, (poc as any)[fieldKey] ?? '');
+    if (!built) return;
+    setLoading(true);
+    try {
+      const result = await generate({
+        prompt: built.prompt,
+        system: built.system,
+        maxTokens: built.maxTokens,
+        feature: 'field-suggest',
+        pocId,
+      });
+      set({ [fieldKey]: result.text } as Partial<PocDocument>);
+    } catch (err: any) {
+      alert(`AI suggestion failed: ${err?.message ?? err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { loading, button: <AiButton onRun={onRun} loading={loading} /> };
+}
+
 // ============================================================
 // 01 — Customer
 // ============================================================
 export function CustomerSection({ poc, set }: SectionProps) {
+  const overviewSuggest = useFieldSuggest('customerOverview', poc, set, poc.id);
   return (
     <SectionCard
       id="customer"
@@ -95,6 +133,7 @@ export function CustomerSection({ poc, set }: SectionProps) {
         label="Customer overview"
         required
         hint="2-4 sentences. Who they are, scale, what they do, why authorization matters now. Aim for ~80–250 words."
+        action={overviewSuggest.button}
       >
         <textarea
           rows={6}
@@ -111,6 +150,8 @@ export function CustomerSection({ poc, set }: SectionProps) {
 // 02 — Compelling Event / Authorization Context
 // ============================================================
 export function ContextSection({ poc, set }: SectionProps) {
+  const compellingSuggest = useFieldSuggest('compellingEvent', poc, set, poc.id);
+  const authContextSuggest = useFieldSuggest('authorizationContext', poc, set, poc.id);
   return (
     <SectionCard
       id="context"
@@ -123,6 +164,7 @@ export function ContextSection({ poc, set }: SectionProps) {
         label="Compelling event"
         required
         hint="What forces a decision in the next 90–180 days? Be specific about timing."
+        action={compellingSuggest.button}
       >
         <textarea
           rows={4}
@@ -135,6 +177,7 @@ export function ContextSection({ poc, set }: SectionProps) {
         label="Authorization context"
         required
         hint="Bullet points (one per line) describing the current state and what needs to change."
+        action={authContextSuggest.button}
       >
         <textarea
           rows={6}
@@ -153,6 +196,9 @@ Provide a unified enforcement layer for the data layer, API gateway, and applica
 // 03 — Objectives & Outcomes
 // ============================================================
 export function ObjectivesSection({ poc, set }: SectionProps) {
+  const objSuggest = useFieldSuggest('objectives', poc, set, poc.id);
+  const validateSuggest = useFieldSuggest('whatToValidate', poc, set, poc.id);
+  const deliverSuggest = useFieldSuggest('postPocDeliverables', poc, set, poc.id);
   return (
     <SectionCard
       id="objectives"
@@ -161,7 +207,7 @@ export function ObjectivesSection({ poc, set }: SectionProps) {
       description="The contract. What does success look like, and what does PlainID owe the customer at the end?"
       status={status(poc, 'objectives')}
     >
-      <Field label="Overall objective" required>
+      <Field label="Overall objective" required action={objSuggest.button}>
         <textarea
           rows={3}
           value={poc.objectives}
@@ -173,6 +219,7 @@ export function ObjectivesSection({ poc, set }: SectionProps) {
         label="What the customer will validate"
         required
         hint="One bullet per line."
+        action={validateSuggest.button}
       >
         <textarea
           rows={6}
@@ -187,6 +234,7 @@ Role consolidation mechanics — how legacy roles map into policies`}
         label="Post-POC deliverables from PlainID"
         required
         hint="One bullet per line."
+        action={deliverSuggest.button}
       >
         <textarea
           rows={5}
@@ -202,6 +250,7 @@ Role consolidation mechanics — how legacy roles map into policies`}
 // 04 — Discovery Summary
 // ============================================================
 export function DiscoverySection({ poc, set }: SectionProps) {
+  const archSuggest = useFieldSuggest('architectureConstraints', poc, set, poc.id);
   const addSystem = () =>
     set({
       inScopeSystems: [
@@ -341,6 +390,7 @@ export function DiscoverySection({ poc, set }: SectionProps) {
       <Field
         label="Architecture constraints & design decisions"
         hint="One bullet per line."
+        action={archSuggest.button}
       >
         <textarea
           rows={5}
@@ -613,6 +663,97 @@ export function UseCasesSection({
     set({ useCases: next });
   };
 
+  // ---- AI: Generate use cases ----
+  const [generateModalOpen, setGenerateModalOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generated, setGenerated] = useState<
+    { tempId: string; title: string; category: string; persona: string; objectives: string; successCriteria: string }[]
+  >([]);
+  const [generatedSelection, setGeneratedSelection] = useState<string[]>([]);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const isValidCategory = (c: string): UseCase['category'] => {
+    const valid = [
+      'Data',
+      'API Gateway',
+      'AI Authorization',
+      'Identity',
+      'Compliance',
+      'Application',
+      'Other',
+    ];
+    return (valid.includes(c) ? c : 'Other') as UseCase['category'];
+  };
+
+  const runGenerate = async () => {
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const { buildGenerateUseCasesPrompt, parseGeneratedUseCases } = await import(
+        '../../lib/ai-prompts'
+      );
+      const built = buildGenerateUseCasesPrompt(poc, 3);
+      const result = await generate({
+        prompt: built.prompt,
+        system: built.system,
+        maxTokens: built.maxTokens,
+        feature: 'generate-use-cases',
+        pocId: poc.id,
+      });
+      const parsed = parseGeneratedUseCases(result.text);
+      if (parsed.length === 0) {
+        setGenerateError('AI returned no usable use cases. Please try again.');
+        setGenerated([]);
+      } else {
+        const withIds = parsed.map((p) => ({ tempId: uid(), ...p }));
+        setGenerated(withIds);
+        setGeneratedSelection(withIds.map((p) => p.tempId));
+      }
+    } catch (err: any) {
+      setGenerateError(err?.message ?? 'AI generation failed');
+      setGenerated([]);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const openGenerateModal = () => {
+    setGenerateModalOpen(true);
+    setGenerated([]);
+    setGeneratedSelection([]);
+    setGenerateError(null);
+    void runGenerate();
+  };
+
+  const toggleGeneratedSelection = (tempId: string) =>
+    setGeneratedSelection((prev) =>
+      prev.includes(tempId) ? prev.filter((x) => x !== tempId) : [...prev, tempId],
+    );
+
+  const acceptSelectedGenerated = () => {
+    const picks = generatedSelection
+      .map((id) => generated.find((g) => g.tempId === id))
+      .filter((g): g is NonNullable<typeof g> => !!g);
+    if (picks.length === 0) return;
+    const newCases: UseCase[] = picks.map((p) => {
+      const cat = isValidCategory(p.category);
+      return {
+        id: uid(),
+        libraryId: null,
+        title: p.title,
+        category: cat,
+        persona: p.persona,
+        objectives: p.objectives,
+        successCriteria: p.successCriteria,
+        technicalSpec: emptyTechnicalSpec(cat),
+      };
+    });
+    set({ useCases: [...poc.useCases, ...newCases] });
+    setGenerateModalOpen(false);
+    setGenerated([]);
+    setGeneratedSelection([]);
+  };
+
   return (
     <SectionCard
       id="usecases"
@@ -622,6 +763,12 @@ export function UseCasesSection({
       status={status(poc, 'usecases')}
     >
       <div className="flex items-center justify-end gap-2 mb-3">
+        <AiButton
+          label="Generate"
+          onRun={openGenerateModal}
+          loading={false}
+          title="Generate candidate use cases using AI based on the POC context"
+        />
         <Button size="sm" onClick={onOpenLibraryPicker}>
           + From library
         </Button>
@@ -712,12 +859,142 @@ export function UseCasesSection({
           </div>
         ))}
       </div>
+
+      {/* AI: Generate use cases modal */}
+      <Modal
+        open={generateModalOpen}
+        onClose={() => {
+          setGenerateModalOpen(false);
+          setGenerated([]);
+          setGeneratedSelection([]);
+          setGenerateError(null);
+        }}
+        title="Generate use cases"
+        width={760}
+      >
+        <p className="text-[12.5px] text-[var(--color-text-muted)] mb-4 leading-relaxed">
+          AI-generated use case candidates based on this POC's customer context, in-scope systems,
+          and existing use cases. Review, deselect any you don't want, and click Insert to add
+          them. You can edit them after insertion.
+        </p>
+
+        {generating && (
+          <div className="text-[12.5px] text-[var(--color-text-muted)] py-8 text-center">
+            Generating candidates… this typically takes 5–15 seconds.
+          </div>
+        )}
+
+        {generateError && !generating && (
+          <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 mb-4">
+            <p className="text-[12px] text-[var(--color-danger)]">{generateError}</p>
+            <Button size="sm" variant="ghost" onClick={runGenerate} className="mt-2">
+              Try again
+            </Button>
+          </div>
+        )}
+
+        {!generating && generated.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {generated.map((g) => {
+              const selected = generatedSelection.includes(g.tempId);
+              return (
+                <div
+                  key={g.tempId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleGeneratedSelection(g.tempId)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault();
+                      toggleGeneratedSelection(g.tempId);
+                    }
+                  }}
+                  className={`cursor-pointer rounded-md p-3 transition-colors flex gap-3 items-start border ${
+                    selected
+                      ? 'bg-[var(--color-pill-accent-bg)] border-[var(--color-pill-accent-border)]'
+                      : 'bg-[var(--color-bg)] border-[var(--color-border)] hover:border-[var(--color-border-strong)]'
+                  }`}
+                >
+                  <div
+                    className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                      selected
+                        ? 'bg-[var(--color-accent)] border-[var(--color-accent)]'
+                        : 'border-[var(--color-border-strong)]'
+                    }`}
+                    aria-hidden
+                  >
+                    {selected && (
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                        <path
+                          d="M2 6l3 3 5-6"
+                          stroke="var(--color-bg)"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 mb-1.5">
+                      <Pill tone="neutral">{g.category.toUpperCase()}</Pill>
+                      <span className="text-[13px] font-medium text-[var(--color-text)]">
+                        {g.title}
+                      </span>
+                    </div>
+                    {g.persona && (
+                      <div className="mono text-[10px] tracking-wider text-[var(--color-text-dim)] mb-1">
+                        Persona: {g.persona}
+                      </div>
+                    )}
+                    {g.objectives && (
+                      <p className="text-[11.5px] text-[var(--color-text-muted)] leading-relaxed mb-1">
+                        <strong>Objectives:</strong> {g.objectives}
+                      </p>
+                    )}
+                    {g.successCriteria && (
+                      <p className="text-[11.5px] text-[var(--color-text-muted)] leading-relaxed whitespace-pre-line">
+                        <strong>Success criteria:</strong>
+                        {'\n'}
+                        {g.successCriteria}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-[var(--color-border)]">
+          <Button variant="ghost" onClick={runGenerate} disabled={generating}>
+            Regenerate
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setGenerateModalOpen(false);
+                setGenerated([]);
+                setGeneratedSelection([]);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={acceptSelectedGenerated}
+              disabled={generatedSelection.length === 0 || generating}
+            >
+              Insert {generatedSelection.length || ''}{' '}
+              {generatedSelection.length === 1 ? 'use case' : 'use cases'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </SectionCard>
   );
 }
-
-// ============================================================
-// 08 — Dependencies
 // ============================================================
 export function DependenciesSection({ poc, set }: SectionProps) {
   return (
