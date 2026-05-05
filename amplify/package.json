@@ -1,4 +1,7 @@
 {
   "name": "amplify-backend",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.658.1"
+  }
 }

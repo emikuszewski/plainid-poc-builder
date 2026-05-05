@@ -1,8 +1,0 @@
-{
-  "name": "ai-generate-handler",
-  "version": "1.0.0",
-  "type": "module",
-  "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.658.1"
-  }
-}
