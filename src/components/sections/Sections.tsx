@@ -879,8 +879,22 @@ export function UseCasesSection({
         </p>
 
         {generating && (
-          <div className="text-[12.5px] text-[var(--color-text-muted)] py-8 text-center">
-            Generating candidates… this typically takes 5–15 seconds.
+          <div className="flex items-center justify-center gap-2.5 py-10 text-[12.5px] text-[var(--color-text-muted)]">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden
+              className="animate-spin"
+            >
+              <circle cx="8" cy="8" r="6" strokeOpacity="0.25" />
+              <path d="M8 2a6 6 0 0 1 6 6" />
+            </svg>
+            <span>Generating…</span>
           </div>
         )}
 
