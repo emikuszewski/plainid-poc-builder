@@ -53,7 +53,6 @@ export async function generate(opts: AiGenerateOptions): Promise<AiGenerateResul
   let errorMessage: string | undefined;
 
   try {
-    // @ts-expect-error — generated mutation typing depends on Amplify codegen
     const response = await client.mutations.aiGenerate({
       prompt: opts.prompt,
       system: opts.system,
@@ -110,7 +109,6 @@ interface UsageLogInput {
 
 async function writeUsageLog(input: UsageLogInput): Promise<void> {
   try {
-    // @ts-expect-error — generated model typing depends on Amplify codegen
     await client.models.AiUsageLog.create({
       userEmail: input.userEmail,
       feature: input.feature,
@@ -132,7 +130,6 @@ async function writeUsageLog(input: UsageLogInput): Promise<void> {
 
 export async function getAiNoticeAccepted(): Promise<boolean> {
   try {
-    // @ts-expect-error — generated model typing
     const result = await client.models.UserPreferences.list();
     const prefs = (result.data ?? [])[0];
     return !!prefs?.aiNoticeAcceptedAt;
@@ -145,17 +142,14 @@ export async function setAiNoticeAccepted(): Promise<void> {
   const userEmail = await getCurrentEmail();
   const acceptedAt = new Date().toISOString();
   try {
-    // @ts-expect-error — generated model typing
     const existing = await client.models.UserPreferences.list();
     const row = (existing.data ?? [])[0];
     if (row) {
-      // @ts-expect-error
       await client.models.UserPreferences.update({
         id: row.id,
         aiNoticeAcceptedAt: acceptedAt,
       });
     } else {
-      // @ts-expect-error
       await client.models.UserPreferences.create({
         userEmail,
         aiNoticeAcceptedAt: acceptedAt,
