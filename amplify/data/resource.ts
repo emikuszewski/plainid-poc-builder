@@ -94,17 +94,6 @@ const schema = a
       ]),
 
     /**
-     * Per-user preferences. Today this only holds the AI privacy-notice
-     * acknowledgement timestamp (ISO string). Owner-only access.
-     */
-    UserPreferences: a
-      .model({
-        userEmail: a.string().required(),
-        aiNoticeAcceptedAt: a.string(), // ISO timestamp
-      })
-      .authorization((allow) => [allow.owner().to(['create', 'read', 'update'])]),
-
-    /**
      * Minimal AI usage logging. One row per aiGenerate call.
      * Stores: who called, what feature, token counts, success/error, ISO timestamp.
      * Does NOT store the prompt or response text (privacy + storage).

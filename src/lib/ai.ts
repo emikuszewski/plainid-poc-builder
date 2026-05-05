@@ -125,37 +125,57 @@ async function writeUsageLog(input: UsageLogInput): Promise<void> {
 }
 
 // ---------------------------------------------------------------------
-// Privacy notice acknowledgment
+// Privacy notice acknowledgment (localStorage-backed)
+//
+// Stored client-side because:
+//   1. The notice is informational — it doesn't gate access to anything,
+//      it's just shown once.
+//   2. Server-side persistence via UserPreferences had reliability issues
+//      with owner-scoped reads returning empty after writes.
+//   3. Browser-local persistence is fine for "have I read this notice" —
+//      if the user signs in on a new browser, they re-read the notice once.
+//      That's arguably correct behavior.
+//
+// We dispatch a custom event on accept so multiple AiButton instances on
+// the same page update synchronously without each having to re-query.
 // ---------------------------------------------------------------------
 
-export async function getAiNoticeAccepted(): Promise<boolean> {
+const NOTICE_KEY = 'pocket:ai-notice-accepted';
+const NOTICE_EVENT = 'pocket:ai-notice-changed';
+
+export function getAiNoticeAcceptedSync(): boolean {
   try {
-    const result = await client.models.UserPreferences.list();
-    const prefs = (result.data ?? [])[0];
-    return !!prefs?.aiNoticeAcceptedAt;
+    return localStorage.getItem(NOTICE_KEY) !== null;
   } catch {
+    // localStorage unavailable (private mode, SSR) — treat as not accepted;
+    // user will see the notice every time but functionality still works
     return false;
   }
 }
 
+export async function getAiNoticeAccepted(): Promise<boolean> {
+  return getAiNoticeAcceptedSync();
+}
+
 export async function setAiNoticeAccepted(): Promise<void> {
-  const userEmail = await getCurrentEmail();
-  const acceptedAt = new Date().toISOString();
   try {
-    const existing = await client.models.UserPreferences.list();
-    const row = (existing.data ?? [])[0];
-    if (row) {
-      await client.models.UserPreferences.update({
-        id: row.id,
-        aiNoticeAcceptedAt: acceptedAt,
-      });
-    } else {
-      await client.models.UserPreferences.create({
-        userEmail,
-        aiNoticeAcceptedAt: acceptedAt,
-      });
-    }
+    localStorage.setItem(NOTICE_KEY, new Date().toISOString());
+    // Notify other AiButton instances on the page
+    window.dispatchEvent(new CustomEvent(NOTICE_EVENT));
   } catch (e) {
     console.warn('Could not persist AI notice acknowledgment', e);
   }
+}
+
+export function onAiNoticeChanged(handler: () => void): () => void {
+  window.addEventListener(NOTICE_EVENT, handler);
+  // Also listen for cross-tab storage events
+  const storageHandler = (e: StorageEvent) => {
+    if (e.key === NOTICE_KEY) handler();
+  };
+  window.addEventListener('storage', storageHandler);
+  return () => {
+    window.removeEventListener(NOTICE_EVENT, handler);
+    window.removeEventListener('storage', storageHandler);
+  };
 }

@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Modal } from './Primitives';
-import { getAiNoticeAccepted, setAiNoticeAccepted } from '../../lib/ai';
+import {
+  getAiNoticeAcceptedSync,
+  setAiNoticeAccepted,
+  onAiNoticeChanged,
+} from '../../lib/ai';
 
 /**
  * AI feature plumbing — a small ✨ button + an info icon that reveals the
@@ -32,24 +36,20 @@ export function AiButton({
   disabled,
   title,
 }: AiButtonProps) {
-  const [accepted, setAccepted] = useState<boolean | null>(null);
+  // Read sync from localStorage — no async wait, no loading state needed.
+  // Subscribe to cross-button updates so all AiButton instances stay in sync.
+  const [accepted, setAccepted] = useState<boolean>(() => getAiNoticeAcceptedSync());
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [pendingRun, setPendingRun] = useState(false);
 
-  // Load acceptance status on first render — cached after that
   useEffect(() => {
-    let cancelled = false;
-    getAiNoticeAccepted().then((ok) => {
-      if (!cancelled) setAccepted(ok);
+    return onAiNoticeChanged(() => {
+      setAccepted(getAiNoticeAcceptedSync());
     });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const handleClick = useCallback(async () => {
     if (loading || disabled) return;
-    if (accepted === null) return; // still loading status
     if (!accepted) {
       setPendingRun(true);
       setNoticeOpen(true);
@@ -75,7 +75,7 @@ export function AiButton({
           size={size}
           variant="ghost"
           onClick={handleClick}
-          disabled={disabled || loading || accepted === null}
+          disabled={disabled || loading}
           title={title ?? `Generate a starter draft using AI`}
         >
           {loading ? (
