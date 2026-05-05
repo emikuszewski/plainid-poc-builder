@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.5.5",
+    "@aws-sdk/client-bedrock-runtime": "^3.658.1",
     "aws-amplify": "^6.6.6",
     "docx": "^9.0.2",
     "file-saver": "^2.0.5",
