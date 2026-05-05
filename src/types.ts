@@ -318,6 +318,14 @@ export interface AuthorizerCatalogEntry {
   enforcementMode: 'proxy' | 'native' | 'sdk' | 'plugin' | 'lambda' | 'mixed';
   shortDescription: string;
   docsUrl: string;
+  // Sensible defaults that auto-fill the AuthorizerSpec on first selection.
+  // Only applied when the corresponding field is currently empty — user
+  // edits are never overwritten.
+  defaults?: {
+    enforcementMode?: string;
+    deploymentTopology?: string;
+    failureMode?: string;
+  };
 }
 
 export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
@@ -329,6 +337,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'proxy',
     shortDescription: 'Real-time proxy for PostgreSQL, MSSQL, generic JDBC. Intercepts SQL and modifies queries inline.',
     docsUrl: 'https://docs.plainid.io/docs/sql-database-authorizer',
+    defaults: {
+      enforcementMode: 'Proxy (inline) — intercepts JDBC traffic, rewrites SQL with row/column filters',
+      deploymentTopology: 'Helm chart in customer Kubernetes cluster',
+      failureMode: 'Fail-closed; 30s decision cache',
+    },
   },
   {
     id: 'sql-spring-boot-sdk',
@@ -337,6 +350,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Library that initiates SQL Authorizer calls from the application layer.',
     docsUrl: 'https://docs.plainid.io/docs/sql-database-authorizer',
+    defaults: {
+      enforcementMode: 'SDK — application calls SQL Authorizer pre-execution',
+      deploymentTopology: 'Maven dependency embedded in customer application',
+      failureMode: 'Fail-closed; 30s decision cache',
+    },
   },
   {
     id: 'sql-dotnet-sdk',
@@ -345,6 +363,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: '.NET library for app-layer SQL modification.',
     docsUrl: 'https://docs.plainid.io/docs/sql-database-authorizer',
+    defaults: {
+      enforcementMode: 'SDK — application calls SQL Authorizer pre-execution',
+      deploymentTopology: 'NuGet package referenced by customer application',
+      failureMode: 'Fail-closed; 30s decision cache',
+    },
   },
   {
     id: 'snowflake-authorizer',
@@ -353,6 +376,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'native',
     shortDescription: 'Generates native Snowflake row access + masking policies. Out-of-path enforcement.',
     docsUrl: 'https://docs.plainid.io/docs/sf-native-policy-support',
+    defaults: {
+      enforcementMode: 'Native — generates Snowflake row access + masking policies; not in query path',
+      deploymentTopology: 'PAA in customer Kubernetes cluster; pushes policies to Snowflake account',
+      failureMode: 'Native enforcement — last-known-good policy state remains in effect if PAA loses connectivity',
+    },
   },
   {
     id: 'databricks-authorizer',
@@ -361,6 +389,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'native',
     shortDescription: 'Unity Catalog row filters and column masks via SQL UDFs. Out-of-path enforcement.',
     docsUrl: 'https://docs.plainid.io/docs/databricks-native-policy-support',
+    defaults: {
+      enforcementMode: 'Native — Unity Catalog row filters and column masks via PlainID UDFs',
+      deploymentTopology: 'PAA in customer Kubernetes cluster; pushes policies to Databricks workspace',
+      failureMode: 'Native enforcement — last-known-good policy state remains in effect if PAA loses connectivity',
+    },
   },
   {
     id: 'bigquery-authorizer',
@@ -369,6 +402,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'native',
     shortDescription: 'Row + column-level access for BigQuery datasets via PAA + foreign tables.',
     docsUrl: 'https://docs.plainid.io/docs/google-bigquery-data-source',
+    defaults: {
+      enforcementMode: 'Native — row + column access via foreign tables + PAA-managed views',
+      deploymentTopology: 'PAA in customer GCP project; manages BigQuery dataset views',
+      failureMode: 'Native enforcement — last-known-good policy state remains in effect if PAA loses connectivity',
+    },
   },
   {
     id: 'denodo-authorizer',
@@ -377,6 +415,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'mixed',
     shortDescription: 'Authorization on Denodo virtualized views.',
     docsUrl: 'https://docs.plainid.io/docs/data-authorizers',
+    defaults: {
+      enforcementMode: 'Mixed — Denodo views call PDP for runtime decisions',
+      deploymentTopology: 'PAA in customer Kubernetes cluster; integrates with Denodo Platform',
+      failureMode: 'Fail-closed; 30s decision cache',
+    },
   },
   {
     id: 'data-service-sdk',
@@ -385,6 +428,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Request enrichment / response filtering pattern for custom data services.',
     docsUrl: 'https://docs.plainid.io/docs/data-authorizers',
+    defaults: {
+      enforcementMode: 'SDK — custom data service calls PDP per request',
+      deploymentTopology: 'Library embedded in customer data service',
+      failureMode: 'Fail-closed; configurable cache (default 30s)',
+    },
   },
 
   // ===== API Gateway =====
@@ -395,6 +443,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'plugin',
     shortDescription: 'Apigee proxy plugin enforcing PBAC at the gateway.',
     docsUrl: 'https://docs.plainid.io/docs/apigee',
+    defaults: {
+      enforcementMode: 'Plugin — Apigee proxy callout to PlainID PDP',
+      deploymentTopology: 'Apigee shared flow / proxy bundle deployed to customer Apigee org',
+      failureMode: 'Fail-closed; configurable cache (default 30s)',
+    },
   },
   {
     id: 'aws-apigateway-authorizer',
@@ -403,6 +456,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'lambda',
     shortDescription: 'Lambda authorizer in front of AWS API Gateway.',
     docsUrl: 'https://docs.plainid.io/docs/amazon-api-gateway',
+    defaults: {
+      enforcementMode: 'Lambda — custom authorizer Lambda invoked by API Gateway',
+      deploymentTopology: 'Lambda function in customer AWS account',
+      failureMode: 'Fail-closed; Lambda authorizer cache (default 30s)',
+    },
   },
   {
     id: 'azure-apim-authorizer',
@@ -411,6 +469,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'plugin',
     shortDescription: 'APIM policy that calls PlainID PDP for fine-grained decisions.',
     docsUrl: 'https://docs.plainid.io/docs/azure-api-management-authorizer-configuration',
+    defaults: {
+      enforcementMode: 'Plugin — APIM inbound policy callout to PlainID PDP',
+      deploymentTopology: 'APIM policy fragment deployed to customer APIM instance',
+      failureMode: 'Fail-closed; configurable cache (default 30s)',
+    },
   },
   {
     id: 'kong-authorizer',
@@ -419,6 +482,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'plugin',
     shortDescription: 'Kong plugin for PBAC enforcement at the gateway.',
     docsUrl: 'https://docs.plainid.io/docs/authorizers',
+    defaults: {
+      enforcementMode: 'Plugin — Kong custom plugin invokes PlainID PDP',
+      deploymentTopology: 'Plugin installed on customer Kong gateway',
+      failureMode: 'Fail-closed; configurable cache (default 30s)',
+    },
   },
   {
     id: 'istio-authorizer',
@@ -427,6 +495,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'plugin',
     shortDescription: 'Service mesh enforcement via Envoy/Istio integration.',
     docsUrl: 'https://docs.plainid.io/docs/authorizers',
+    defaults: {
+      enforcementMode: 'Plugin — Envoy ext_authz filter calls PlainID PDP',
+      deploymentTopology: 'Sidecar configuration in customer Istio mesh',
+      failureMode: 'Fail-closed; Envoy decision cache',
+    },
   },
   {
     id: 'apigw-rest-permit-deny',
@@ -435,6 +508,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Yes/no authorization endpoint for custom or unsupported gateways.',
     docsUrl: 'https://docs.plainid.io/apidocs/authorization-apis',
+    defaults: {
+      enforcementMode: 'REST — gateway calls /permit-deny endpoint per request',
+      deploymentTopology: 'PDP exposed via REST; gateway integration via custom plugin/script',
+      failureMode: 'Fail-closed; gateway-side cache recommended',
+    },
   },
 
   // ===== AI Authorization =====
@@ -445,6 +523,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Authorization gates inside LangChain agent workflows.',
     docsUrl: 'https://docs.plainid.io/docs/authorizers',
+    defaults: {
+      enforcementMode: 'SDK — agent workflow calls PDP at tool selection / RAG retrieval gates',
+      deploymentTopology: 'Python package in customer agent runtime',
+      failureMode: 'Refuse with explanation; log decision id; do not retry with constrained tools',
+    },
   },
   {
     id: 'langgraph-authorizer',
@@ -453,6 +536,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Authorization at LangGraph state-machine transitions.',
     docsUrl: 'https://docs.plainid.io/docs/authorizers',
+    defaults: {
+      enforcementMode: 'SDK — state-machine transition checks call PDP',
+      deploymentTopology: 'Python package in customer agent runtime',
+      failureMode: 'Refuse with explanation; log decision id',
+    },
   },
   {
     id: 'mcp-authorizer',
@@ -461,6 +549,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Tool-list filter, tool-invocation auth, and downstream resource auth at the MCP layer.',
     docsUrl: 'https://docs.plainid.io/docs/authorizers',
+    defaults: {
+      enforcementMode: 'SDK — MCP server filters tool list, gates invocations, authorizes downstream resources',
+      deploymentTopology: 'Python package in customer MCP server',
+      failureMode: 'Tool list filtered; unauthorized invocations rejected with clear error',
+    },
   },
   {
     id: 'ai-rest-permit-deny',
@@ -469,6 +562,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Yes/no authorization endpoint for custom agent runtimes.',
     docsUrl: 'https://docs.plainid.io/apidocs/authorization-apis',
+    defaults: {
+      enforcementMode: 'REST — agent runtime calls /permit-deny endpoint per gate',
+      deploymentTopology: 'PDP exposed via REST; integration via custom code in agent runtime',
+      failureMode: 'Fail-closed; refuse with explanation',
+    },
   },
 
   // ===== Application =====
@@ -479,6 +577,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Spring Boot library for in-app fine-grained authorization.',
     docsUrl: 'https://docs.plainid.io/docs/authorizers',
+    defaults: {
+      enforcementMode: 'SDK — Spring application calls PDP at protected resource boundaries',
+      deploymentTopology: 'Maven dependency embedded in customer Spring application',
+      failureMode: 'Fail-closed; configurable cache (default 30s)',
+    },
   },
   {
     id: 'app-dotnet-sdk',
@@ -487,6 +590,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: '.NET library for in-app fine-grained authorization.',
     docsUrl: 'https://docs.plainid.io/docs/authorizers',
+    defaults: {
+      enforcementMode: 'SDK — .NET application calls PDP at protected resource boundaries',
+      deploymentTopology: 'NuGet package referenced by customer .NET application',
+      failureMode: 'Fail-closed; configurable cache (default 30s)',
+    },
   },
   {
     id: 'app-rest-permit-deny',
@@ -495,6 +603,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Yes/no authorization endpoint for any application.',
     docsUrl: 'https://docs.plainid.io/apidocs/authorization-apis',
+    defaults: {
+      enforcementMode: 'REST — application calls /permit-deny endpoint per request',
+      deploymentTopology: 'PDP exposed via REST; integration via HTTP client in customer app',
+      failureMode: 'Fail-closed; client-side cache recommended',
+    },
   },
   {
     id: 'app-rest-policy-resolution',
@@ -503,6 +616,11 @@ export const AUTHORIZER_CATALOG: AuthorizerCatalogEntry[] = [
     enforcementMode: 'sdk',
     shortDescription: 'Returns the asset list a user can access. Best for large-scale data scenarios.',
     docsUrl: 'https://docs.plainid.io/apidocs/authorization-apis',
+    defaults: {
+      enforcementMode: 'REST — application requests asset list per user; PDP returns scoped resources',
+      deploymentTopology: 'PDP exposed via REST; integration via HTTP client in customer app',
+      failureMode: 'Fail-closed; client-side caching of resolution results recommended',
+    },
   },
 
   // ===== Other / Custom (always last per category) =====

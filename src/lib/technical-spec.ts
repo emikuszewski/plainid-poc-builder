@@ -25,26 +25,31 @@ function emptyAuthorizer(category: UseCaseCategory): AuthorizerSpec {
   // (IdentitySpec/ComplianceSpec) holds the downstream references.
   const catalog = authorizersForCategory(category);
   const defaultId = catalog[0]?.id ?? 'custom';
-  const defaultDocsUrl = findAuthorizer(defaultId)?.docsUrl;
+  const defaultEntry = findAuthorizer(defaultId);
+  const defaultDocsUrl = defaultEntry?.docsUrl;
+  const presets = defaultEntry?.defaults;
 
   const docs: UrlEntry[] = defaultDocsUrl
     ? [{ id: uid(), label: 'PlainID Authorizer Documentation', url: defaultDocsUrl, notes: '' }]
     : [];
 
+  // Apply catalog presets to relevant fields when present
+  const presetUF = (v?: string) => (v ? { value: v, unknown: false } : emptyUF());
+
   return {
     selectedAuthorizerId: defaultId,
     customAuthorizerName: emptyUF(),
     version: emptyUF(),
-    deploymentTopology: emptyUF(),
+    deploymentTopology: presetUF(presets?.deploymentTopology),
     deploymentTarget: emptyUF(),
     pdpEndpoint: emptyUF(),
     identitySourcePaths: emptyUF(),
     networkPath: emptyUF(),
     credentialsLocation: emptyUF(),
     credentialsProvisioner: emptyUF(),
-    enforcementMode: emptyUF(),
+    enforcementMode: presetUF(presets?.enforcementMode),
     sampleRequestResponse: emptyUF(),
-    failureMode: emptyUF(),
+    failureMode: presetUF(presets?.failureMode),
     performanceBudget: emptyUF(),
     requiredPipIntegrations: emptyUF(),
     authorizerDocs: docs,

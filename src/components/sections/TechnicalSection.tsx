@@ -234,7 +234,21 @@ function AuthorizerBlock({
       spec.authorizerDocs.length === 0 && auth?.docsUrl
         ? [{ id: uid(), label: 'Documentation', url: auth.docsUrl, notes: '' }]
         : spec.authorizerDocs;
-    onChange({ ...spec, selectedAuthorizerId: authorizerId, authorizerDocs: docs });
+    // Apply catalog defaults only to empty + non-unknown fields.
+    // We never overwrite user input or "Unknown — TBD" markers.
+    const fillIfEmpty = (current: UnknownableField, defaultValue?: string): UnknownableField =>
+      defaultValue && !current.unknown && current.value.trim() === ''
+        ? { value: defaultValue, unknown: false }
+        : current;
+    const d = auth?.defaults;
+    onChange({
+      ...spec,
+      selectedAuthorizerId: authorizerId,
+      authorizerDocs: docs,
+      enforcementMode: fillIfEmpty(spec.enforcementMode, d?.enforcementMode),
+      deploymentTopology: fillIfEmpty(spec.deploymentTopology, d?.deploymentTopology),
+      failureMode: fillIfEmpty(spec.failureMode, d?.failureMode),
+    });
   };
 
   const updateField = (key: keyof AuthorizerSpec, next: UnknownableField) =>

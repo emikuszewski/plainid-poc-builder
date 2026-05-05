@@ -417,8 +417,10 @@ export function emptyPoc(ownerEmail: string): PocDocument {
     personas: DEFAULT_PERSONAS.map((p) => ({ ...p, id: uid() })),
     teamMembers: [],
     useCases: [],
-    customerResponsibilities: '',
-    plainidResponsibilities: '',
+    customerResponsibilities:
+      'Provision Kubernetes cluster (or namespace) for PlainID component deployment\nProvide network connectivity to data sources, identity stores, and downstream systems\nIdentify a network/infrastructure contact for connectivity setup and troubleshooting\nProvision test user accounts representing each persona, with documented attribute values\nProvide sample JWTs / token introspection for the primary IdP\nGrant POC team access to the customer POC environment\nReview success criteria with stakeholders prior to kickoff',
+    plainidResponsibilities:
+      'Provision PlainID SaaS tenant (PAP) scoped for the POC\nProvide Helm charts and deployment documentation for PDP/PAA components\nLead authorizer configuration, integration testing, and policy authoring\nDeliver weekly status reports against use case success criteria\nProvide Solutions Engineering support throughout the engagement\nDocument findings, gaps, and post-POC recommendations',
     openItems: '',
     tracker: DEFAULT_TRACKER.map((t) => ({ ...t, id: uid() })),
     referenceDocs: DEFAULT_REFERENCE_DOCS.map((d) => ({ ...d, id: uid() })),

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type {
   PocDocument,
   InScopeSystem,
@@ -11,7 +11,7 @@ import type {
   ReferenceDoc,
   UseCaseLibraryEntry,
 } from '../../types';
-import { Field, Button, SectionCard, Pill, EmptyState } from '../ui/Primitives';
+import { Field, Button, SectionCard, Pill, EmptyState, Modal } from '../ui/Primitives';
 import { evaluateSection } from '../../lib/completeness';
 import { emptyTechnicalSpec, reshapeTechnicalSpec } from '../../lib/technical-spec';
 
@@ -55,6 +55,32 @@ export function CustomerSection({ poc, set }: SectionProps) {
             onChange={(e) => set({ customerIndustry: e.target.value })}
             placeholder="e.g. Semiconductor / Manufacturing"
           />
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {[
+              'Banking',
+              'Insurance',
+              'Healthcare',
+              'Telco',
+              'Manufacturing',
+              'Retail',
+              'Government',
+              'Energy',
+              'Tech / SaaS',
+            ].map((industry) => (
+              <button
+                key={industry}
+                type="button"
+                onClick={() => set({ customerIndustry: industry })}
+                className={`text-[10.5px] px-1.5 py-0.5 rounded border transition-colors ${
+                  poc.customerIndustry === industry
+                    ? 'bg-[var(--color-pill-accent-bg)] text-[var(--color-accent)] border-[var(--color-pill-accent-border)]'
+                    : 'bg-transparent text-[var(--color-text-dim)] border-[var(--color-border)] hover:text-[var(--color-text)] hover:border-[var(--color-border-strong)]'
+                }`}
+              >
+                {industry}
+              </button>
+            ))}
+          </div>
         </Field>
         <Field label="Headquarters" className="md:col-span-2">
           <input
@@ -750,6 +776,45 @@ export function TrackerSection({ poc, set }: SectionProps) {
   const remove = (id: string) =>
     set({ tracker: poc.tracker.filter((t) => t.id !== id) });
 
+  // Bulk paste — parses TSV (tab-separated, what spreadsheets paste as)
+  // or CSV. Columns: Phase, Task, Responsible, Status, Due. Status defaults
+  // to "Not Started" if missing. Empty/whitespace lines are skipped.
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+
+  const validStatuses: Record<string, TrackerRow['status']> = {
+    'not started': 'Not Started',
+    'in progress': 'In Progress',
+    completed: 'Completed',
+    blocked: 'Blocked',
+  };
+
+  function parsePastedRows(text: string): Omit<TrackerRow, 'id'>[] {
+    return text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        // Detect delimiter: tabs (spreadsheet paste) preferred; fall back to comma
+        const cols = line.includes('\t') ? line.split('\t') : line.split(/\s*,\s*/);
+        const [phase = '', task = '', responsible = '', statusRaw = '', dueDate = ''] = cols.map(
+          (c) => c.trim(),
+        );
+        const status = validStatuses[statusRaw.toLowerCase()] ?? 'Not Started';
+        return { phase, task, responsible, status, dueDate };
+      })
+      .filter((r) => r.phase || r.task); // require at least phase or task to count
+  }
+
+  const pasteParsed = pasteText.trim() ? parsePastedRows(pasteText) : [];
+
+  function applyPaste() {
+    const newRows = pasteParsed.map((r) => ({ id: uid(), ...r }));
+    set({ tracker: [...poc.tracker, ...newRows] });
+    setPasteOpen(false);
+    setPasteText('');
+  }
+
   return (
     <SectionCard
       id="tracker"
@@ -758,7 +823,10 @@ export function TrackerSection({ poc, set }: SectionProps) {
       description="Phased task list. Pre-populated from the standard PlainID engagement template — edit as needed."
       status={status(poc, 'tracker')}
     >
-      <div className="flex items-center justify-end mb-2">
+      <div className="flex items-center justify-end mb-2 gap-2">
+        <Button size="sm" variant="ghost" onClick={() => setPasteOpen(true)}>
+          Paste rows
+        </Button>
         <Button size="sm" onClick={addRow}>
           + Add row
         </Button>
@@ -845,6 +913,84 @@ export function TrackerSection({ poc, set }: SectionProps) {
           </tbody>
         </table>
       </div>
+
+      <Modal
+        open={pasteOpen}
+        onClose={() => {
+          setPasteOpen(false);
+          setPasteText('');
+        }}
+        title="Paste tracker rows"
+        width={720}
+      >
+        <p className="text-[12.5px] text-[var(--color-text-muted)] mb-3 leading-relaxed">
+          Paste rows from a spreadsheet (Excel, Google Sheets, Numbers) or comma-separated text.
+          Columns: <strong className="text-[var(--color-text)]">Phase, Task, Responsible, Status, Due</strong>.
+          Status and Due are optional. Status defaults to "Not Started" if blank.
+        </p>
+        <Field label="Paste here">
+          <textarea
+            rows={8}
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            placeholder={`Kickoff & Planning\tDefine POC scope\tCustomer + PlainID\tNot Started\t2026-06-01\nIntegration\tConfigure PIP\tPlainID\tIn Progress\t`}
+            autoFocus
+          />
+        </Field>
+        {pasteParsed.length > 0 && (
+          <div className="mt-3 border border-[var(--color-border)] rounded-md p-2.5 bg-[var(--color-bg)] max-h-[180px] overflow-y-auto">
+            <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-1.5">
+              PARSED · {pasteParsed.length} {pasteParsed.length === 1 ? 'ROW' : 'ROWS'}
+            </div>
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-left text-[var(--color-text-dim)]">
+                  <th className="font-medium pb-1 pr-2">Phase</th>
+                  <th className="font-medium pb-1 pr-2">Task</th>
+                  <th className="font-medium pb-1 pr-2">Responsible</th>
+                  <th className="font-medium pb-1 pr-2">Status</th>
+                  <th className="font-medium pb-1">Due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pasteParsed.slice(0, 20).map((r, i) => (
+                  <tr key={i} className="border-t border-[var(--color-border)]">
+                    <td className="py-1 pr-2 truncate">{r.phase || '—'}</td>
+                    <td className="py-1 pr-2 truncate">{r.task || '—'}</td>
+                    <td className="py-1 pr-2 truncate">{r.responsible || '—'}</td>
+                    <td className="py-1 pr-2 truncate">{r.status}</td>
+                    <td className="py-1 truncate">{r.dueDate || '—'}</td>
+                  </tr>
+                ))}
+                {pasteParsed.length > 20 && (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="py-1 text-[var(--color-text-dim)] italic text-center"
+                    >
+                      + {pasteParsed.length - 20} more
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-[var(--color-border)]">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setPasteOpen(false);
+              setPasteText('');
+            }}
+          >
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={applyPaste} disabled={pasteParsed.length === 0}>
+            Append {pasteParsed.length || ''} {pasteParsed.length === 1 ? 'row' : 'rows'}
+          </Button>
+        </div>
+      </Modal>
     </SectionCard>
   );
 }
