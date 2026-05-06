@@ -165,6 +165,17 @@ export function renderHtml(poc: PocDocument, opts: { standalone?: boolean } = {}
       <p>PlainID enables enterprises to modernize their access control strategy with centralized, dynamic, and scalable authorization — delivering security, operational efficiency, and regulatory compliance. We sit at the intersection of IAM, Zero Trust, and Data Security, helping organizations translate complex access requirements into business-enabling policies.</p>
       <p>As a leader in Authorization-as-a-Service, PlainID provides a comprehensive Policy-Based Access Control (PBAC) platform to centrally manage, enforce, and audit fine-grained, dynamic access policies across Applications, APIs, Data Platforms, and Digital Services.</p>
       <p>At our core, PlainID decouples authorization logic from applications and centralizes it into a flexible, scalable policy engine — empowering organizations like ${escape(customer)} to dynamically govern who can access what, under which conditions, based on identity, context, and risk.</p>
+      <h3>Common Business Drivers</h3>
+      <ul>
+        <li><strong>Dynamic, Fine-Grained Access Control</strong> — Enforce real-time decisions based on user identity, attributes (department, role, clearance), environment, and risk signals.</li>
+        <li><strong>Zero Trust Architecture (ZTA) Enablement</strong> — Centralize authorization to support least-privilege access and continuous validation.</li>
+        <li><strong>Data Security &amp; Governance Compliance</strong> — Provide transparent, explainable policies for audit and regulatory review (SOX, GDPR, CCPA, etc.).</li>
+        <li><strong>Role Consolidation &amp; Policy Migration</strong> — Convert legacy role-based access models into dynamic, attribute-driven PBAC policies at scale.</li>
+        <li><strong>Data Platform Authorization</strong> — Govern access to Databricks, Snowflake, and other data platforms through unified policy enforcement.</li>
+        <li><strong>API Gateway Integration</strong> — Manage authorization uniformly behind API gateways without embedding logic in backend services.</li>
+        <li><strong>Accelerating Data &amp; AI Initiatives</strong> — Secure data access for analytics, AI systems, and APIs while supporting dynamic, attribute-based controls on sensitive datasets.</li>
+        <li><strong>Faster Cloud &amp; SaaS Adoption</strong> — Provide consistent authorization across hybrid and multi-cloud environments.</li>
+      </ul>
     </section>
 
     <section>
@@ -189,6 +200,11 @@ export function renderHtml(poc: PocDocument, opts: { standalone?: boolean } = {}
 
     <section>
       <h2>Discovery Summary</h2>
+      ${
+        poc.tenantStrategy && poc.tenantStrategy.trim()
+          ? `<h3>Tenant Strategy</h3>${p(poc.tenantStrategy)}`
+          : ''
+      }
       <h3>In-Scope Systems &amp; Platforms</h3>
       ${
         inScopeRows
@@ -200,6 +216,11 @@ export function renderHtml(poc: PocDocument, opts: { standalone?: boolean } = {}
       ${
         poc.architectureConstraints
           ? `<h3>Architecture Constraints &amp; Design Decisions</h3>${ul(poc.architectureConstraints) || p(poc.architectureConstraints)}`
+          : ''
+      }
+      ${
+        poc.outOfScope && poc.outOfScope.trim()
+          ? `<h3>Out of Scope</h3><p style="color:#525252">The following items have been discussed and are explicitly out of scope for this POC.</p>${ul(poc.outOfScope) || p(poc.outOfScope)}`
           : ''
       }
     </section>

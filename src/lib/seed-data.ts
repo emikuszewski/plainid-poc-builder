@@ -406,9 +406,11 @@ export function emptyPoc(ownerEmail: string): PocDocument {
     whatToValidate: '',
     postPocDeliverables:
       'Total Cost of Ownership (TCO) model — including Authorizer licensing, implementation, and ongoing support\nInfrastructure requirements — cluster specs, networking, what the customer must provision\nImplementation plan — phased rollout aligned to customer timelines\nSkill set requirements for customer teams to operate and maintain the solution\nGap analysis — items requiring product roadmap alignment',
+    tenantStrategy: '',
     inScopeSystems: [],
     identitySources: [],
     architectureConstraints: '',
+    outOfScope: '',
     timelineSummary:
       'Scoped for a minimum of 6 weeks to allow sufficient time for environment setup, use-case sprint execution, testing, and knowledge transfer. Structured as 2-week sprints aligned to use-case clusters.',
     sprints: DEFAULT_SPRINTS.map((s) => ({ ...s, id: uid() })),

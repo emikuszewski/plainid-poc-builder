@@ -287,6 +287,18 @@ export function DiscoverySection({ poc, set }: SectionProps) {
       description="What systems are in scope, the customer's identity stack, and any architecture constraints surfaced during discovery."
       status={status(poc, 'discovery')}
     >
+      <Field
+        label="Tenant strategy"
+        hint="Whose tenant runs the POC, who has access, why. Optional. Useful when the customer owns the tenant and PlainID drives via screenshare, or vice versa."
+      >
+        <textarea
+          rows={4}
+          value={poc.tenantStrategy}
+          onChange={(e) => set({ tenantStrategy: e.target.value })}
+          placeholder="The POC will run in the customer's PlainID tenant. The tenant has been provisioned and IdP integration is complete. PlainID does not have direct access — sessions are driven by the customer team with PlainID providing real-time guidance..."
+        />
+      </Field>
+
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <label>In-scope systems &amp; platforms</label>
@@ -399,6 +411,20 @@ export function DiscoverySection({ poc, set }: SectionProps) {
           placeholder={`No microservices architecture — enforcement at data layer and API gateway tier
 Kubernetes hosting — components deployed via Helm chart
 Data layer is the primary focus`}
+        />
+      </Field>
+
+      <Field
+        label="Out of scope"
+        hint="One bullet per line. Things explicitly excluded from this POC — call them out so they don't leak into expectations."
+      >
+        <textarea
+          rows={5}
+          value={poc.outOfScope}
+          onChange={(e) => set({ outOfScope: e.target.value })}
+          placeholder={`Denodo — qualified out during scope alignment
+Native SQL client integration — production pattern documented but not validated
+Agentic AI use cases — tracked separately`}
         />
       </Field>
     </SectionCard>

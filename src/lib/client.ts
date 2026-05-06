@@ -53,9 +53,11 @@ export function fromRecord(r: any): PocDocument {
     whatToValidate: r.whatToValidate ?? '',
     postPocDeliverables: r.postPocDeliverables ?? '',
 
+    tenantStrategy: r.tenantStrategy ?? '',
     inScopeSystems: parseJson<InScopeSystem[]>(r.inScopeSystems, []),
     identitySources: parseJson<IdentitySource[]>(r.identitySources, []),
     architectureConstraints: r.architectureConstraints ?? '',
+    outOfScope: r.outOfScope ?? '',
 
     timelineSummary: r.timelineSummary ?? '',
     sprints: parseJson<Sprint[]>(r.sprints, []),
@@ -95,9 +97,11 @@ export function toRecord(p: PocDocument) {
     whatToValidate: p.whatToValidate,
     postPocDeliverables: p.postPocDeliverables,
 
+    tenantStrategy: p.tenantStrategy,
     inScopeSystems: JSON.stringify(p.inScopeSystems),
     identitySources: JSON.stringify(p.identitySources),
     architectureConstraints: p.architectureConstraints,
+    outOfScope: p.outOfScope,
 
     timelineSummary: p.timelineSummary,
     sprints: JSON.stringify(p.sprints),

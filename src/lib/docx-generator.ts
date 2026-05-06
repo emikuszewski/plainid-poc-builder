@@ -13,6 +13,13 @@ import {
   ShadingType,
   PageOrientation,
   LevelFormat,
+  Header,
+  Footer,
+  PageBreak,
+  PageNumber,
+  ImageRun,
+  TabStopType,
+  TabStopPosition,
 } from 'docx';
 import { saveAs } from 'file-saver';
 import type {
@@ -27,27 +34,80 @@ import {
   findAuthorizer,
 } from '../types';
 
+// ============================================================
+// Brand & layout constants
+// ============================================================
+
+const BRAND_GREEN = 'AADD00';
+const TEXT_PRIMARY = '0A0A0A';
+const TEXT_MUTED = '525252';
+const BORDER_LIGHT = 'D9D9D9';
+const TABLE_HEADER_BG = 'F5F5F5';
+
+const LOGO_URL =
+  'https://www.plainid.com/wp-content/uploads/2025/12/PlainID-logo-icon-button-2.png';
+
 const lines = (s: string | undefined | null) =>
   String(s ?? '')
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
 
-const para = (text: string, opts: { bold?: boolean; size?: number; spacing?: { before?: number; after?: number } } = {}) =>
+/**
+ * Body paragraph at the canonical body size.
+ */
+const para = (
+  text: string,
+  opts: {
+    bold?: boolean;
+    size?: number;
+    spacing?: { before?: number; after?: number };
+    color?: string;
+  } = {},
+) =>
   new Paragraph({
-    spacing: opts.spacing ?? { before: 80, after: 80 },
-    children: [new TextRun({ text, bold: opts.bold, size: opts.size, font: 'Calibri' })],
+    spacing: opts.spacing ?? { before: 100, after: 100 },
+    children: [
+      new TextRun({
+        text,
+        bold: opts.bold,
+        size: opts.size ?? 22,
+        font: 'Calibri',
+        color: opts.color,
+      }),
+    ],
   });
 
-const bulletList = (items: string[]) =>
-  items.map(
-    (item) =>
-      new Paragraph({
-        numbering: { reference: 'bullets', level: 0 },
-        spacing: { before: 40, after: 40 },
-        children: [new TextRun({ text: item, size: 22, font: 'Calibri' })],
-      }),
-  );
+/**
+ * Auto-detect the "**Term** — explanation" pattern in a single bullet.
+ *
+ * If the line contains an em-dash with surrounding spaces (the convention used
+ * across PlainID POC docs), bold the lead-in part. Falls back to plain text
+ * if no em-dash is present. Hyphen and en-dash are intentionally NOT detected
+ * to reduce false positives — only the proper em-dash (` — `) qualifies.
+ */
+function bulletWithLeadIn(text: string): Paragraph {
+  const emDashIdx = text.indexOf(' — ');
+  if (emDashIdx > 0 && emDashIdx < 80) {
+    const lead = text.slice(0, emDashIdx);
+    const rest = text.slice(emDashIdx); // includes ' — '
+    return new Paragraph({
+      numbering: { reference: 'bullets', level: 0 },
+      spacing: { before: 60, after: 60 },
+      children: [
+        new TextRun({ text: lead, bold: true, size: 22, font: 'Calibri' }),
+        new TextRun({ text: rest, size: 22, font: 'Calibri' }),
+      ],
+    });
+  }
+  return new Paragraph({
+    numbering: { reference: 'bullets', level: 0 },
+    spacing: { before: 60, after: 60 },
+    children: [new TextRun({ text, size: 22, font: 'Calibri' })],
+  });
+}
+
+const bulletList = (items: string[]) => items.map(bulletWithLeadIn);
 
 const heading = (text: string, level: typeof HeadingLevel[keyof typeof HeadingLevel]) =>
   new Paragraph({
@@ -56,7 +116,37 @@ const heading = (text: string, level: typeof HeadingLevel[keyof typeof HeadingLe
     children: [new TextRun({ text, bold: true, font: 'Calibri' })],
   });
 
-const border = { style: BorderStyle.SINGLE, size: 4, color: 'BFBFBF' };
+/**
+ * Brand accent rule: a thin lime-green horizontal bar used under the logo on
+ * the cover and at section breaks. Implemented as a bottom-bordered empty
+ * paragraph since docx.js doesn't expose horizontal-rule primitives directly.
+ */
+const accentRule = () =>
+  new Paragraph({
+    spacing: { before: 120, after: 240 },
+    border: {
+      bottom: { color: BRAND_GREEN, style: BorderStyle.SINGLE, size: 12, space: 1 },
+    },
+    children: [new TextRun({ text: '', font: 'Calibri' })],
+  });
+
+/**
+ * Fetch the PlainID logo PNG as a buffer once. Browser CORS-safe because
+ * the PlainID WP host serves with permissive CORS for static assets.
+ * Returns null on failure — generator falls back to typographic mark.
+ */
+async function fetchLogoBuffer(): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(LOGO_URL);
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+  } catch {
+    return null;
+  }
+}
+
+const border = { style: BorderStyle.SINGLE, size: 4, color: BORDER_LIGHT };
 const borders = { top: border, bottom: border, left: border, right: border };
 
 const cell = (
@@ -67,72 +157,204 @@ const cell = (
     borders,
     width: { size: opts.widthDxa ?? opts.width, type: WidthType.DXA },
     shading: opts.bg ? { fill: opts.bg, type: ShadingType.CLEAR } : undefined,
-    margins: { top: 80, bottom: 80, left: 120, right: 120 },
+    margins: { top: 100, bottom: 100, left: 140, right: 140 },
     children:
       Array.isArray(text)
         ? text
         : [
             new Paragraph({
-              children: [new TextRun({ text, bold: opts.bold, size: 20, font: 'Calibri' })],
+              children: [
+                new TextRun({
+                  text,
+                  bold: opts.bold,
+                  size: 20,
+                  font: 'Calibri',
+                  color: opts.bold ? TEXT_PRIMARY : TEXT_MUTED,
+                }),
+              ],
             }),
           ],
   });
 
 export async function generateDocx(poc: PocDocument): Promise<Blob> {
   const customer = poc.customerName || 'Customer';
-  const children: any[] = [];
+  const dateStr = formatDate(new Date());
 
-  // === Cover ===
-  children.push(
+  // Fetch the logo for embedding (best-effort; falls back to typographic mark)
+  const logoBuffer = await fetchLogoBuffer();
+
+  // ---- Cover (lives in its own section — no header/footer, page break after) ----
+  const coverChildren: any[] = [];
+
+  // Vertical breathing room above the logo (visually centers the cover)
+  coverChildren.push(
     new Paragraph({
-      alignment: AlignmentType.LEFT,
+      spacing: { before: 2400, after: 0 },
+      children: [new TextRun({ text: '', font: 'Calibri' })],
+    }),
+  );
+
+  if (logoBuffer) {
+    coverChildren.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 120 },
+        children: [
+          new ImageRun({
+            data: logoBuffer,
+            // Type assertion: docx.js types are missing 'png' in some versions
+            type: 'png' as any,
+            transformation: { width: 80, height: 80 },
+          }) as any,
+          new TextRun({
+            text: '  plain',
+            size: 56,
+            font: 'Calibri',
+            color: TEXT_PRIMARY,
+          }),
+          new TextRun({
+            text: 'ID',
+            size: 56,
+            bold: true,
+            font: 'Calibri',
+            color: TEXT_PRIMARY,
+          }),
+        ],
+      }),
+    );
+  } else {
+    // Fallback: typographic-only treatment
+    coverChildren.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 120 },
+        children: [
+          new TextRun({
+            text: 'plain',
+            size: 56,
+            font: 'Calibri',
+            color: TEXT_PRIMARY,
+          }),
+          new TextRun({
+            text: 'ID',
+            size: 56,
+            bold: true,
+            font: 'Calibri',
+            color: TEXT_PRIMARY,
+          }),
+        ],
+      }),
+    );
+  }
+
+  // Tagline under the wordmark
+  coverChildren.push(
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
       spacing: { before: 0, after: 240 },
       children: [
         new TextRun({
-          text: 'PLAINID  ·  THE AUTHORIZATION COMPANY',
+          text: 'THE AUTHORIZATION COMPANY',
           bold: true,
-          color: '0A0A0A',
+          color: TEXT_MUTED,
           size: 18,
           font: 'Calibri',
           characterSpacing: 40,
         }),
       ],
     }),
+  );
+
+  // Lime accent bar
+  coverChildren.push(accentRule());
+
+  // Main cover title block
+  coverChildren.push(
     new Paragraph({
-      spacing: { before: 600, after: 100 },
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 240, after: 100 },
       children: [
-        new TextRun({ text: 'PROOF OF CONCEPT', bold: true, size: 24, color: '525252', font: 'Calibri' }),
+        new TextRun({
+          text: 'PROOF OF CONCEPT',
+          bold: true,
+          size: 28,
+          color: TEXT_MUTED,
+          font: 'Calibri',
+          characterSpacing: 40,
+        }),
       ],
     }),
     new Paragraph({
-      spacing: { before: 0, after: 100 },
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 80, after: 200 },
       children: [
-        new TextRun({ text: customer, bold: true, size: 64, font: 'Calibri' }),
+        new TextRun({
+          text: customer,
+          bold: true,
+          size: 64,
+          font: 'Calibri',
+          color: TEXT_PRIMARY,
+        }),
       ],
     }),
     new Paragraph({
-      spacing: { before: 300, after: 600 },
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 200, after: 360 },
       children: [
-        new TextRun({ text: 'CONFIDENTIAL', bold: true, size: 16, color: '525252', font: 'Calibri' }),
+        new TextRun({
+          text: dateStr,
+          size: 28,
+          color: TEXT_MUTED,
+          font: 'Calibri',
+        }),
+      ],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 120, after: 0 },
+      children: [
+        new TextRun({
+          text: 'CONFIDENTIAL',
+          bold: true,
+          size: 22,
+          color: BRAND_GREEN,
+          font: 'Calibri',
+          characterSpacing: 80,
+        }),
       ],
     }),
   );
+
+  // ---- Body content ----
+  const children: any[] = [];
 
   // === PlainID Overview ===
   children.push(heading('PlainID Overview', HeadingLevel.HEADING_1));
   children.push(
     para(
       'PlainID enables enterprises to modernize their access control strategy with centralized, dynamic, and scalable authorization — delivering security, operational efficiency, and regulatory compliance. We sit at the intersection of IAM, Zero Trust, and Data Security, helping organizations translate complex access requirements into business-enabling policies.',
-      { size: 22 },
     ),
     para(
       'As a leader in Authorization-as-a-Service, PlainID provides a comprehensive Policy-Based Access Control (PBAC) platform to centrally manage, enforce, and audit fine-grained, dynamic access policies across Applications, APIs, Data Platforms, and Digital Services.',
-      { size: 22 },
     ),
     para(
       `At our core, PlainID decouples authorization logic from applications and centralizes it into a flexible, scalable policy engine — empowering organizations like ${customer} to dynamically govern who can access what, under which conditions, based on identity, context, and risk.`,
-      { size: 22 },
     ),
+  );
+
+  // === Common Business Drivers (boilerplate, customer-name interpolated) ===
+  children.push(heading('Common Business Drivers', HeadingLevel.HEADING_2));
+  children.push(
+    ...bulletList([
+      'Dynamic, Fine-Grained Access Control — Enforce real-time decisions based on user identity, attributes (department, role, clearance), environment, and risk signals.',
+      'Zero Trust Architecture (ZTA) Enablement — Centralize authorization to support least-privilege access and continuous validation.',
+      'Data Security & Governance Compliance — Provide transparent, explainable policies for audit and regulatory review (SOX, GDPR, CCPA, etc.).',
+      'Role Consolidation & Policy Migration — Convert legacy role-based access models into dynamic, attribute-driven PBAC policies at scale.',
+      'Data Platform Authorization — Govern access to Databricks, Snowflake, and other data platforms through unified policy enforcement.',
+      'API Gateway Integration — Manage authorization uniformly behind API gateways without embedding logic in backend services.',
+      'Accelerating Data & AI Initiatives — Secure data access for analytics, AI systems, and APIs while supporting dynamic, attribute-based controls on sensitive datasets.',
+      'Faster Cloud & SaaS Adoption — Provide consistent authorization across hybrid and multi-cloud environments.',
+    ]),
   );
 
   // === Customer Overview ===
@@ -171,15 +393,23 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
   // === Discovery Summary ===
   children.push(heading('Discovery Summary', HeadingLevel.HEADING_1));
 
+  if (poc.tenantStrategy && poc.tenantStrategy.trim()) {
+    children.push(heading('Tenant Strategy', HeadingLevel.HEADING_2));
+    for (const line of String(poc.tenantStrategy).split(/\n\s*\n/).filter(Boolean)) {
+      children.push(para(line.trim()));
+    }
+  }
+
   if (poc.inScopeSystems.length) {
     children.push(heading('In-Scope Systems & Platforms', HeadingLevel.HEADING_2));
     const colW = [3120, 4680, 1560]; // sums to 9360
     const rows = [
       new TableRow({
+        tableHeader: true,
         children: [
-          cell('System / Platform', { width: colW[0], bold: true, bg: 'F4F4F4' }),
-          cell('POC Focus', { width: colW[1], bold: true, bg: 'F4F4F4' }),
-          cell('Priority', { width: colW[2], bold: true, bg: 'F4F4F4' }),
+          cell('System / Platform', { width: colW[0], bold: true, bg: TABLE_HEADER_BG }),
+          cell('POC Focus', { width: colW[1], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Priority', { width: colW[2], bold: true, bg: TABLE_HEADER_BG }),
         ],
       }),
       ...poc.inScopeSystems.map(
@@ -209,7 +439,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
         (s) =>
           new Paragraph({
             numbering: { reference: 'bullets', level: 0 },
-            spacing: { before: 40, after: 40 },
+            spacing: { before: 60, after: 60 },
             children: [
               new TextRun({ text: `${s.name} — `, bold: true, size: 22, font: 'Calibri' }),
               new TextRun({ text: s.type, italics: true, size: 22, font: 'Calibri' }),
@@ -225,6 +455,17 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
   if (lines(poc.architectureConstraints).length) {
     children.push(heading('Architecture Constraints & Design Decisions', HeadingLevel.HEADING_2));
     children.push(...bulletList(lines(poc.architectureConstraints)));
+  }
+
+  if (lines(poc.outOfScope).length) {
+    children.push(heading('Out of Scope', HeadingLevel.HEADING_2));
+    children.push(
+      para(
+        'The following items have been discussed and are explicitly out of scope for this POC. Listed here for traceability and to keep the engagement focused.',
+        { color: TEXT_MUTED },
+      ),
+    );
+    children.push(...bulletList(lines(poc.outOfScope)));
   }
 
   // === Use Cases ===
@@ -356,10 +597,11 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
     const colW = [2080, 2080, 5200];
     const rows = [
       new TableRow({
+        tableHeader: true,
         children: [
-          cell('Phase', { width: colW[0], bold: true, bg: 'F4F4F4' }),
-          cell('Weeks', { width: colW[1], bold: true, bg: 'F4F4F4' }),
-          cell('Focus', { width: colW[2], bold: true, bg: 'F4F4F4' }),
+          cell('Phase', { width: colW[0], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Weeks', { width: colW[1], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Focus', { width: colW[2], bold: true, bg: TABLE_HEADER_BG }),
         ],
       }),
       ...poc.sprints.map(
@@ -405,11 +647,12 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
     const colW = [1872, 2496, 2496, 2496];
     const rows = [
       new TableRow({
+        tableHeader: true,
         children: [
-          cell('Org', { width: colW[0], bold: true, bg: 'F4F4F4' }),
-          cell('Name', { width: colW[1], bold: true, bg: 'F4F4F4' }),
-          cell('Role', { width: colW[2], bold: true, bg: 'F4F4F4' }),
-          cell('Contact', { width: colW[3], bold: true, bg: 'F4F4F4' }),
+          cell('Org', { width: colW[0], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Name', { width: colW[1], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Role', { width: colW[2], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Contact', { width: colW[3], bold: true, bg: TABLE_HEADER_BG }),
         ],
       }),
       ...poc.teamMembers.map(
@@ -457,11 +700,11 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
       new TableRow({
         tableHeader: true,
         children: [
-          cell('Phase', { width: colW[0], bold: true, bg: 'F4F4F4' }),
-          cell('Task', { width: colW[1], bold: true, bg: 'F4F4F4' }),
-          cell('Responsible', { width: colW[2], bold: true, bg: 'F4F4F4' }),
-          cell('Status', { width: colW[3], bold: true, bg: 'F4F4F4' }),
-          cell('Due', { width: colW[4], bold: true, bg: 'F4F4F4' }),
+          cell('Phase', { width: colW[0], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Task', { width: colW[1], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Responsible', { width: colW[2], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Status', { width: colW[3], bold: true, bg: TABLE_HEADER_BG }),
+          cell('Due', { width: colW[4], bold: true, bg: TABLE_HEADER_BG }),
         ],
       }),
       ...poc.tracker.map(
@@ -504,7 +747,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
     creator: 'PlainID POC Builder',
     title: `PlainID POC — ${customer}`,
     styles: {
-      default: { document: { run: { font: 'Calibri', size: 22 } } },
+      default: { document: { run: { font: 'Calibri', size: 22, color: TEXT_PRIMARY } } },
       paragraphStyles: [
         {
           id: 'Heading1',
@@ -512,8 +755,14 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 32, bold: true, font: 'Calibri', color: '0A0A0A' },
-          paragraph: { spacing: { before: 360, after: 180 }, outlineLevel: 0 },
+          run: { size: 32, bold: true, font: 'Calibri', color: TEXT_PRIMARY },
+          paragraph: {
+            spacing: { before: 480, after: 200 },
+            outlineLevel: 0,
+            border: {
+              bottom: { color: BRAND_GREEN, style: BorderStyle.SINGLE, size: 8, space: 4 },
+            },
+          },
         },
         {
           id: 'Heading2',
@@ -521,8 +770,8 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 26, bold: true, font: 'Calibri', color: '0A0A0A' },
-          paragraph: { spacing: { before: 240, after: 120 }, outlineLevel: 1 },
+          run: { size: 26, bold: true, font: 'Calibri', color: TEXT_PRIMARY },
+          paragraph: { spacing: { before: 280, after: 120 }, outlineLevel: 1 },
         },
       ],
     },
@@ -543,16 +792,86 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
       ],
     },
     sections: [
+      // ---- Cover (no header/footer, no page number) ----
       {
         properties: {
           page: {
-            size: {
-              width: 12240,
-              height: 15840,
-              orientation: PageOrientation.PORTRAIT,
-            },
+            size: { width: 12240, height: 15840, orientation: PageOrientation.PORTRAIT },
+            margin: { top: 1080, right: 1440, bottom: 1080, left: 1440 },
+          },
+          titlePage: false,
+        },
+        children: coverChildren,
+      },
+      // ---- Body (header on every page, footer with page number) ----
+      {
+        properties: {
+          page: {
+            size: { width: 12240, height: 15840, orientation: PageOrientation.PORTRAIT },
             margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
           },
+        },
+        headers: {
+          default: new Header({
+            children: [
+              new Paragraph({
+                tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+                spacing: { before: 0, after: 80 },
+                border: {
+                  bottom: { color: BRAND_GREEN, style: BorderStyle.SINGLE, size: 6, space: 4 },
+                },
+                children: [
+                  new TextRun({
+                    text: `${customer} POC | Confidential`,
+                    size: 18,
+                    color: TEXT_MUTED,
+                    font: 'Calibri',
+                  }),
+                  new TextRun({ text: '\t', font: 'Calibri' }),
+                  new TextRun({
+                    text: dateStr,
+                    size: 18,
+                    color: TEXT_MUTED,
+                    font: 'Calibri',
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+                spacing: { before: 80, after: 0 },
+                border: {
+                  top: { color: BORDER_LIGHT, style: BorderStyle.SINGLE, size: 4, space: 4 },
+                },
+                children: [
+                  new TextRun({
+                    text: '© 2026 PlainID Ltd. All rights reserved | Confidential',
+                    size: 16,
+                    color: TEXT_MUTED,
+                    font: 'Calibri',
+                  }),
+                  new TextRun({ text: '\t', font: 'Calibri' }),
+                  new TextRun({
+                    text: 'Page ',
+                    size: 16,
+                    color: TEXT_MUTED,
+                    font: 'Calibri',
+                  }),
+                  new TextRun({
+                    children: [PageNumber.CURRENT],
+                    size: 16,
+                    color: TEXT_MUTED,
+                    font: 'Calibri',
+                  }),
+                ],
+              }),
+            ],
+          }),
         },
         children,
       },
@@ -560,6 +879,14 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
   });
 
   return await Packer.toBlob(doc);
+}
+
+/**
+ * "March 2026" style — month name + 4-digit year, no day. Matches the
+ * cover-page convention used in TI/PlainID POC documents.
+ */
+function formatDate(d: Date): string {
+  return d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 }
 
 // ============================================================

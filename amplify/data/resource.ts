@@ -40,9 +40,11 @@ const schema = a
         postPocDeliverables: a.string(),
 
         // Section 4: Discovery (arrays stored as JSON strings)
+        tenantStrategy: a.string(),
         inScopeSystems: a.json(),
         identitySources: a.json(),
         architectureConstraints: a.string(),
+        outOfScope: a.string(),
 
         // Section 5: Timeline
         timelineSummary: a.string(),

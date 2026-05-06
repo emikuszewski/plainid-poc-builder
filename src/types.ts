@@ -234,9 +234,11 @@ export interface PocDocument {
   postPocDeliverables: string; // multiline list
 
   // Section 4: Discovery Summary
+  tenantStrategy: string; // optional prose describing whose tenant runs the POC and why
   inScopeSystems: InScopeSystem[];
   identitySources: IdentitySource[];
   architectureConstraints: string;
+  outOfScope: string; // multiline list of things explicitly excluded
 
   // Section 5: Timeline
   timelineSummary: string;
