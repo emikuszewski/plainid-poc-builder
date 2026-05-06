@@ -223,7 +223,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
       spacing: { before: 0, after: 120 },
       children: [
         new TextRun({
-          text: 'plain',
+          text: 'Plain',
           size: 56,
           font: 'Manrope',
           color: TEXT_PRIMARY,
