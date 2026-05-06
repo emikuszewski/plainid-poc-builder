@@ -53,6 +53,7 @@ export function fromRecord(r: any): PocDocument {
     whatToValidate: r.whatToValidate ?? '',
     postPocDeliverables: r.postPocDeliverables ?? '',
 
+    tenantStrategyChoice: (r.tenantStrategyChoice ?? '') as PocDocument['tenantStrategyChoice'],
     tenantStrategy: r.tenantStrategy ?? '',
     inScopeSystems: parseJson<InScopeSystem[]>(r.inScopeSystems, []),
     identitySources: parseJson<IdentitySource[]>(r.identitySources, []),
@@ -97,6 +98,7 @@ export function toRecord(p: PocDocument) {
     whatToValidate: p.whatToValidate,
     postPocDeliverables: p.postPocDeliverables,
 
+    tenantStrategyChoice: p.tenantStrategyChoice,
     tenantStrategy: p.tenantStrategy,
     inScopeSystems: JSON.stringify(p.inScopeSystems),
     identitySources: JSON.stringify(p.identitySources),

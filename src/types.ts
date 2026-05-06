@@ -234,7 +234,12 @@ export interface PocDocument {
   postPocDeliverables: string; // multiline list
 
   // Section 4: Discovery Summary
-  tenantStrategy: string; // optional prose describing whose tenant runs the POC and why
+  /**
+   * Tenant strategy radio choice. Drives the default prose for `tenantStrategy`.
+   * Empty string means the SE hasn't picked yet (legacy POCs default here).
+   */
+  tenantStrategyChoice: 'customer' | 'plainid' | 'other' | '';
+  tenantStrategy: string; // prose describing whose tenant runs the POC and why
   inScopeSystems: InScopeSystem[];
   identitySources: IdentitySource[];
   architectureConstraints: string;

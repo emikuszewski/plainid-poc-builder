@@ -17,6 +17,8 @@ import { evaluateSection } from '../../lib/completeness';
 import { emptyTechnicalSpec, reshapeTechnicalSpec } from '../../lib/technical-spec';
 import { generate } from '../../lib/ai';
 import { buildFieldSuggestPrompt, FIELD_PROMPTS } from '../../lib/ai-prompts';
+import { tenantStrategyDefault } from '../../lib/seed-data';
+import type { TenantStrategyChoice } from '../../lib/seed-data';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -287,17 +289,85 @@ export function DiscoverySection({ poc, set }: SectionProps) {
       description="What systems are in scope, the customer's identity stack, and any architecture constraints surfaced during discovery."
       status={status(poc, 'discovery')}
     >
-      <Field
-        label="Tenant strategy"
-        hint="Whose tenant runs the POC, who has access, why. Optional. Useful when the customer owns the tenant and PlainID drives via screenshare, or vice versa."
-      >
-        <textarea
-          rows={4}
-          value={poc.tenantStrategy}
-          onChange={(e) => set({ tenantStrategy: e.target.value })}
-          placeholder="The POC will run in the customer's PlainID tenant. The tenant has been provisioned and IdP integration is complete. PlainID does not have direct access — sessions are driven by the customer team with PlainID providing real-time guidance..."
-        />
-      </Field>
+      <div className="mb-4">
+        <label className="mb-1.5">Tenant strategy</label>
+        <div className="flex flex-col gap-1.5 mb-2">
+          {([
+            {
+              key: 'customer' as const,
+              label: "Customer's existing PlainID tenant",
+              caveat: 'PlainID has no access — sessions are customer-driven via screenshare',
+            },
+            {
+              key: 'plainid' as const,
+              label: 'PlainID-provisioned tenant for the customer',
+              caveat: 'PlainID has access — work proceeds asynchronously between sessions',
+            },
+            {
+              key: 'other' as const,
+              label: 'Something else',
+              caveat: 'Free-form description below',
+            },
+          ]).map((opt) => {
+            const selected = poc.tenantStrategyChoice === opt.key;
+            return (
+              <label
+                key={opt.key}
+                className={`flex items-start gap-2.5 p-2.5 rounded-md cursor-pointer border transition-colors ${
+                  selected
+                    ? 'bg-[var(--color-pill-accent-bg)] border-[var(--color-pill-accent-border)]'
+                    : 'bg-transparent border-[var(--color-border)] hover:border-[var(--color-border-strong)]'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="tenant-strategy"
+                  className="mt-0.5"
+                  checked={selected}
+                  onChange={() => {
+                    // Smart swap: only overwrite the textarea if its current
+                    // contents match the previous choice's default verbatim.
+                    // SE edits are preserved.
+                    const previousDefault = tenantStrategyDefault(
+                      poc.tenantStrategyChoice as TenantStrategyChoice,
+                      poc.customerName,
+                    );
+                    const isUntouched =
+                      poc.tenantStrategy.trim() === previousDefault.trim();
+                    const nextText = isUntouched
+                      ? tenantStrategyDefault(opt.key, poc.customerName)
+                      : poc.tenantStrategy;
+                    set({
+                      tenantStrategyChoice: opt.key,
+                      tenantStrategy: nextText,
+                    });
+                  }}
+                />
+                <div className="flex-1">
+                  <div className="text-[13px] font-medium text-[var(--color-text)]">
+                    {opt.label}
+                  </div>
+                  <div className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5">
+                    {opt.caveat}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+        {poc.tenantStrategyChoice && (
+          <textarea
+            rows={4}
+            value={poc.tenantStrategy}
+            onChange={(e) => set({ tenantStrategy: e.target.value })}
+            placeholder={
+              poc.tenantStrategyChoice === 'other'
+                ? 'Describe the tenant arrangement and access model for this engagement.'
+                : ''
+            }
+          />
+        )}
+      </div>
 
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">

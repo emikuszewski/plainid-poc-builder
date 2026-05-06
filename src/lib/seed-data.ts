@@ -392,6 +392,34 @@ export const DEFAULT_REFERENCE_DOCS: Omit<ReferenceDoc, 'id'>[] = [
 // Empty POC factory
 // ============================================================
 
+// ============================================================
+// Tenant strategy default paragraphs
+//
+// Each choice ships with a standard paragraph the SE can edit. The text
+// captures the access reality (who has tenant access, who drives sessions)
+// so the deliverable accurately reflects how the engagement runs.
+// `{customer}` is interpolated at selection time, not at every render.
+// ============================================================
+
+export type TenantStrategyChoice = 'customer' | 'plainid' | 'other' | '';
+
+export function tenantStrategyDefault(
+  choice: TenantStrategyChoice,
+  customerName: string,
+): string {
+  const customer = customerName.trim() || 'the customer';
+  switch (choice) {
+    case 'customer':
+      return `The POC will run in ${customer}'s PlainID tenant. ${customer} owns and operates the tenant; PlainID does not have direct access. Working sessions in the tenant will be driven by a ${customer} representative, with PlainID providing real-time guidance and validation.`;
+    case 'plainid':
+      return `PlainID will provision a dedicated tenant for the ${customer} POC engagement. PlainID retains administrative access to support configuration and troubleshooting between sessions. ${customer} will be granted appropriate roles to participate in policy authoring, testing, and review.`;
+    case 'other':
+    case '':
+    default:
+      return '';
+  }
+}
+
 export function emptyPoc(ownerEmail: string): PocDocument {
   return {
     customerName: '',
@@ -406,6 +434,7 @@ export function emptyPoc(ownerEmail: string): PocDocument {
     whatToValidate: '',
     postPocDeliverables:
       'Total Cost of Ownership (TCO) model — including Authorizer licensing, implementation, and ongoing support\nInfrastructure requirements — cluster specs, networking, what the customer must provision\nImplementation plan — phased rollout aligned to customer timelines\nSkill set requirements for customer teams to operate and maintain the solution\nGap analysis — items requiring product roadmap alignment',
+    tenantStrategyChoice: '',
     tenantStrategy: '',
     inScopeSystems: [],
     identitySources: [],
