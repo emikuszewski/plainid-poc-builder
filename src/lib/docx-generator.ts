@@ -20,8 +20,10 @@ import {
   ImageRun,
   TabStopType,
   TabStopPosition,
+  Tab,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import { embedManropeIntoDocx } from './font-embed';
 import type {
   PocDocument,
   UnknownableField,
@@ -72,7 +74,7 @@ const para = (
         text,
         bold: opts.bold,
         size: opts.size ?? 22,
-        font: 'Calibri',
+        font: 'Manrope',
         color: opts.color,
       }),
     ],
@@ -95,15 +97,15 @@ function bulletWithLeadIn(text: string): Paragraph {
       numbering: { reference: 'bullets', level: 0 },
       spacing: { before: 60, after: 60 },
       children: [
-        new TextRun({ text: lead, bold: true, size: 22, font: 'Calibri' }),
-        new TextRun({ text: rest, size: 22, font: 'Calibri' }),
+        new TextRun({ text: lead, bold: true, size: 22, font: 'Manrope' }),
+        new TextRun({ text: rest, size: 22, font: 'Manrope' }),
       ],
     });
   }
   return new Paragraph({
     numbering: { reference: 'bullets', level: 0 },
     spacing: { before: 60, after: 60 },
-    children: [new TextRun({ text, size: 22, font: 'Calibri' })],
+    children: [new TextRun({ text, size: 22, font: 'Manrope' })],
   });
 }
 
@@ -113,7 +115,7 @@ const heading = (text: string, level: typeof HeadingLevel[keyof typeof HeadingLe
   new Paragraph({
     heading: level,
     spacing: { before: 240, after: 120 },
-    children: [new TextRun({ text, bold: true, font: 'Calibri' })],
+    children: [new TextRun({ text, bold: true, font: 'Manrope' })],
   });
 
 /**
@@ -127,7 +129,7 @@ const accentRule = () =>
     border: {
       bottom: { color: BRAND_GREEN, style: BorderStyle.SINGLE, size: 12, space: 1 },
     },
-    children: [new TextRun({ text: '', font: 'Calibri' })],
+    children: [new TextRun({ text: '', font: 'Manrope' })],
   });
 
 /**
@@ -168,7 +170,7 @@ const cell = (
                   text,
                   bold: opts.bold,
                   size: 20,
-                  font: 'Calibri',
+                  font: 'Manrope',
                   color: opts.bold ? TEXT_PRIMARY : TEXT_MUTED,
                 }),
               ],
@@ -190,62 +192,52 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
   coverChildren.push(
     new Paragraph({
       spacing: { before: 2400, after: 0 },
-      children: [new TextRun({ text: '', font: 'Calibri' })],
+      children: [new TextRun({ text: '', font: 'Manrope' })],
     }),
   );
 
   if (logoBuffer) {
+    // Icon stacked above the wordmark — both centered. This avoids the
+    // visual right-shift caused by inline icon+text in a single paragraph.
     coverChildren.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 120 },
+        spacing: { before: 0, after: 80 },
         children: [
           new ImageRun({
             data: logoBuffer,
             // Type assertion: docx.js types are missing 'png' in some versions
             type: 'png' as any,
-            transformation: { width: 80, height: 80 },
+            transformation: { width: 64, height: 64 },
           }) as any,
-          new TextRun({
-            text: '  plain',
-            size: 56,
-            font: 'Calibri',
-            color: TEXT_PRIMARY,
-          }),
-          new TextRun({
-            text: 'ID',
-            size: 56,
-            bold: true,
-            font: 'Calibri',
-            color: TEXT_PRIMARY,
-          }),
-        ],
-      }),
-    );
-  } else {
-    // Fallback: typographic-only treatment
-    coverChildren.push(
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 120 },
-        children: [
-          new TextRun({
-            text: 'plain',
-            size: 56,
-            font: 'Calibri',
-            color: TEXT_PRIMARY,
-          }),
-          new TextRun({
-            text: 'ID',
-            size: 56,
-            bold: true,
-            font: 'Calibri',
-            color: TEXT_PRIMARY,
-          }),
         ],
       }),
     );
   }
+
+  // Wordmark — always rendered (sits below icon when icon is present,
+  // alone when logo fetch failed).
+  coverChildren.push(
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 0, after: 120 },
+      children: [
+        new TextRun({
+          text: 'plain',
+          size: 56,
+          font: 'Manrope',
+          color: TEXT_PRIMARY,
+        }),
+        new TextRun({
+          text: 'ID',
+          size: 56,
+          bold: true,
+          font: 'Manrope',
+          color: TEXT_PRIMARY,
+        }),
+      ],
+    }),
+  );
 
   // Tagline under the wordmark
   coverChildren.push(
@@ -255,10 +247,9 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
       children: [
         new TextRun({
           text: 'THE AUTHORIZATION COMPANY',
-          bold: true,
           color: TEXT_MUTED,
           size: 18,
-          font: 'Calibri',
+          font: 'Manrope SemiBold',
           characterSpacing: 40,
         }),
       ],
@@ -276,10 +267,9 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
       children: [
         new TextRun({
           text: 'PROOF OF CONCEPT',
-          bold: true,
           size: 28,
           color: TEXT_MUTED,
-          font: 'Calibri',
+          font: 'Manrope SemiBold',
           characterSpacing: 40,
         }),
       ],
@@ -292,7 +282,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
           text: customer,
           bold: true,
           size: 64,
-          font: 'Calibri',
+          font: 'Manrope',
           color: TEXT_PRIMARY,
         }),
       ],
@@ -305,7 +295,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
           text: dateStr,
           size: 28,
           color: TEXT_MUTED,
-          font: 'Calibri',
+          font: 'Manrope',
         }),
       ],
     }),
@@ -318,7 +308,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
           bold: true,
           size: 22,
           color: BRAND_GREEN,
-          font: 'Calibri',
+          font: 'Manrope',
           characterSpacing: 80,
         }),
       ],
@@ -441,10 +431,10 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
             numbering: { reference: 'bullets', level: 0 },
             spacing: { before: 60, after: 60 },
             children: [
-              new TextRun({ text: `${s.name} — `, bold: true, size: 22, font: 'Calibri' }),
-              new TextRun({ text: s.type, italics: true, size: 22, font: 'Calibri' }),
+              new TextRun({ text: `${s.name} — `, bold: true, size: 22, font: 'Manrope' }),
+              new TextRun({ text: s.type, italics: true, size: 22, font: 'Manrope' }),
               ...(s.notes
-                ? [new TextRun({ text: ` — ${s.notes}`, size: 22, font: 'Calibri' })]
+                ? [new TextRun({ text: ` — ${s.notes}`, size: 22, font: 'Manrope' })]
                 : []),
             ],
           }),
@@ -495,7 +485,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
                   bold: true,
                   color: 'FFFFFF',
                   size: 22,
-                  font: 'Calibri',
+                  font: 'Manrope',
                 }),
               ],
             }),
@@ -517,10 +507,10 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
             new Paragraph({
               numbering: { reference: 'bullets', level: 0 },
               spacing: { before: 40, after: 40 },
-              children: [new TextRun({ text: o, size: 20, font: 'Calibri' })],
+              children: [new TextRun({ text: o, size: 20, font: 'Manrope' })],
             }),
         )
-      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Manrope' })] })];
 
     const successParagraphs = lines(u.successCriteria).length
       ? lines(u.successCriteria).map(
@@ -528,10 +518,10 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
             new Paragraph({
               numbering: { reference: 'bullets', level: 0 },
               spacing: { before: 40, after: 40 },
-              children: [new TextRun({ text: o, size: 20, font: 'Calibri' })],
+              children: [new TextRun({ text: o, size: 20, font: 'Manrope' })],
             }),
         )
-      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Manrope' })] })];
 
     const objectivesRow = new TableRow({
       children: [
@@ -634,8 +624,8 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
             numbering: { reference: 'bullets', level: 0 },
             spacing: { before: 40, after: 40 },
             children: [
-              new TextRun({ text: `${p.name} — `, bold: true, size: 22, font: 'Calibri' }),
-              new TextRun({ text: p.description, size: 22, font: 'Calibri' }),
+              new TextRun({ text: `${p.name} — `, bold: true, size: 22, font: 'Manrope' }),
+              new TextRun({ text: p.description, size: 22, font: 'Manrope' }),
             ],
           }),
       ),
@@ -732,10 +722,10 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
           numbering: { reference: 'bullets', level: 0 },
           spacing: { before: 40, after: 40 },
           children: [
-            new TextRun({ text: d.title, bold: true, size: 22, font: 'Calibri' }),
-            new TextRun({ text: ` — ${d.url}`, color: '0d8a72', size: 22, font: 'Calibri' }),
+            new TextRun({ text: d.title, bold: true, size: 22, font: 'Manrope' }),
+            new TextRun({ text: ` — ${d.url}`, color: '0d8a72', size: 22, font: 'Manrope' }),
             ...(d.description
-              ? [new TextRun({ text: ` — ${d.description}`, size: 22, font: 'Calibri' })]
+              ? [new TextRun({ text: ` — ${d.description}`, size: 22, font: 'Manrope' })]
               : []),
           ],
         }),
@@ -747,7 +737,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
     creator: 'PlainID POC Builder',
     title: `PlainID POC — ${customer}`,
     styles: {
-      default: { document: { run: { font: 'Calibri', size: 22, color: TEXT_PRIMARY } } },
+      default: { document: { run: { font: 'Manrope', size: 22, color: TEXT_PRIMARY } } },
       paragraphStyles: [
         {
           id: 'Heading1',
@@ -755,7 +745,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 32, bold: true, font: 'Calibri', color: TEXT_PRIMARY },
+          run: { size: 32, bold: true, font: 'Manrope', color: TEXT_PRIMARY },
           paragraph: {
             spacing: { before: 480, after: 200 },
             outlineLevel: 0,
@@ -770,7 +760,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 26, bold: true, font: 'Calibri', color: TEXT_PRIMARY },
+          run: { size: 26, bold: true, font: 'Manrope', color: TEXT_PRIMARY },
           paragraph: { spacing: { before: 280, after: 120 }, outlineLevel: 1 },
         },
       ],
@@ -825,14 +815,13 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
                     text: `${customer} POC | Confidential`,
                     size: 18,
                     color: TEXT_MUTED,
-                    font: 'Calibri',
+                    font: 'Manrope',
                   }),
-                  new TextRun({ text: '\t', font: 'Calibri' }),
                   new TextRun({
-                    text: dateStr,
+                    children: [new Tab(), dateStr],
                     size: 18,
                     color: TEXT_MUTED,
-                    font: 'Calibri',
+                    font: 'Manrope',
                   }),
                 ],
               }),
@@ -853,20 +842,19 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
                     text: '© 2026 PlainID Ltd. All rights reserved | Confidential',
                     size: 16,
                     color: TEXT_MUTED,
-                    font: 'Calibri',
+                    font: 'Manrope',
                   }),
-                  new TextRun({ text: '\t', font: 'Calibri' }),
                   new TextRun({
-                    text: 'Page ',
+                    children: [new Tab(), 'Page '],
                     size: 16,
                     color: TEXT_MUTED,
-                    font: 'Calibri',
+                    font: 'Manrope',
                   }),
                   new TextRun({
                     children: [PageNumber.CURRENT],
                     size: 16,
                     color: TEXT_MUTED,
-                    font: 'Calibri',
+                    font: 'Manrope',
                   }),
                 ],
               }),
@@ -901,7 +889,7 @@ const ufText = (f: UnknownableField | undefined): string => {
 
 function ufParagraphs(f: UnknownableField | undefined): Paragraph[] {
   if (!f) {
-    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Manrope' })] })];
   }
   if (f.unknown) {
     return [
@@ -910,7 +898,7 @@ function ufParagraphs(f: UnknownableField | undefined): Paragraph[] {
           new TextRun({
             text: 'TBD — to be resolved during POC',
             size: 20,
-            font: 'Calibri',
+            font: 'Manrope',
             color: '92400E',
             italics: true,
           }),
@@ -920,12 +908,12 @@ function ufParagraphs(f: UnknownableField | undefined): Paragraph[] {
   }
   const items = lines(f.value);
   if (items.length === 0) {
-    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Manrope' })] })];
   }
   if (items.length === 1) {
     return [
       new Paragraph({
-        children: [new TextRun({ text: items[0], size: 20, font: 'Calibri' })],
+        children: [new TextRun({ text: items[0], size: 20, font: 'Manrope' })],
       }),
     ];
   }
@@ -934,14 +922,14 @@ function ufParagraphs(f: UnknownableField | undefined): Paragraph[] {
       new Paragraph({
         numbering: { reference: 'bullets', level: 0 },
         spacing: { before: 30, after: 30 },
-        children: [new TextRun({ text: l, size: 20, font: 'Calibri' })],
+        children: [new TextRun({ text: l, size: 20, font: 'Manrope' })],
       }),
   );
 }
 
 function urlEntriesParagraphs(entries: UrlEntry[] | undefined): Paragraph[] {
   if (!entries || entries.length === 0) {
-    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+    return [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Manrope' })] })];
   }
   return entries.map(
     (e) =>
@@ -949,10 +937,10 @@ function urlEntriesParagraphs(entries: UrlEntry[] | undefined): Paragraph[] {
         numbering: { reference: 'bullets', level: 0 },
         spacing: { before: 30, after: 30 },
         children: [
-          new TextRun({ text: `${e.label || 'URL'} — `, bold: true, size: 20, font: 'Calibri' }),
-          new TextRun({ text: e.url, size: 20, font: 'Calibri', color: '0D8A72' }),
+          new TextRun({ text: `${e.label || 'URL'} — `, bold: true, size: 20, font: 'Manrope' }),
+          new TextRun({ text: e.url, size: 20, font: 'Manrope', color: '0D8A72' }),
           ...(e.notes
-            ? [new TextRun({ text: ` — ${e.notes}`, size: 20, font: 'Calibri', italics: true })]
+            ? [new TextRun({ text: ` — ${e.notes}`, size: 20, font: 'Manrope', italics: true })]
             : []),
         ],
       }),
@@ -984,7 +972,7 @@ function specTitleRow(text: string): TableRow {
         children: [
           new Paragraph({
             children: [
-              new TextRun({ text, bold: true, color: 'FFFFFF', size: 22, font: 'Calibri' }),
+              new TextRun({ text, bold: true, color: 'FFFFFF', size: 22, font: 'Manrope' }),
             ],
           }),
         ],
@@ -1024,12 +1012,12 @@ function pushTechBlockForUseCase(
           text: u.title || '(untitled)',
           bold: true,
           size: 24,
-          font: 'Calibri',
+          font: 'Manrope',
         }),
         new TextRun({
           text: `   ${u.category.toUpperCase()}`,
           size: 18,
-          font: 'Calibri',
+          font: 'Manrope',
           color: '0D8A72',
           bold: true,
           characterSpacing: 30,
@@ -1059,7 +1047,7 @@ function pushTechBlockForUseCase(
                 text: catalogEntry.shortDescription,
                 italics: true,
                 size: 20,
-                font: 'Calibri',
+                font: 'Manrope',
               }),
             ],
           }),
@@ -1146,15 +1134,15 @@ function pushTechBlockForUseCase(
             numbering: { reference: 'bullets', level: 0 },
             spacing: { before: 30, after: 30 },
             children: [
-              new TextRun({ text: d.title || '(untitled)', bold: true, size: 20, font: 'Calibri' }),
-              new TextRun({ text: ` — ${d.category}`, size: 20, font: 'Calibri', italics: true }),
+              new TextRun({ text: d.title || '(untitled)', bold: true, size: 20, font: 'Manrope' }),
+              new TextRun({ text: ` — ${d.category}`, size: 20, font: 'Manrope', italics: true }),
               ...(auth
-                ? [new TextRun({ text: ` · ${auth.name}`, size: 20, font: 'Calibri' })]
+                ? [new TextRun({ text: ` · ${auth.name}`, size: 20, font: 'Manrope' })]
                 : []),
             ],
           });
         })
-      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Manrope' })] })];
     const rows: TableRow[] = [specTitleRow('Identity Specifics')];
     rows.push(specRow('Downstream Authorizers', downstreamParagraphs));
     rows.push(specRow('Role Inventory', ufParagraphs(i.roleInventory)));
@@ -1177,15 +1165,15 @@ function pushTechBlockForUseCase(
             numbering: { reference: 'bullets', level: 0 },
             spacing: { before: 30, after: 30 },
             children: [
-              new TextRun({ text: d.title || '(untitled)', bold: true, size: 20, font: 'Calibri' }),
-              new TextRun({ text: ` — ${d.category}`, size: 20, font: 'Calibri', italics: true }),
+              new TextRun({ text: d.title || '(untitled)', bold: true, size: 20, font: 'Manrope' }),
+              new TextRun({ text: ` — ${d.category}`, size: 20, font: 'Manrope', italics: true }),
               ...(auth
-                ? [new TextRun({ text: ` · ${auth.name}`, size: 20, font: 'Calibri' })]
+                ? [new TextRun({ text: ` · ${auth.name}`, size: 20, font: 'Manrope' })]
                 : []),
             ],
           });
         })
-      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Calibri' })] })];
+      : [new Paragraph({ children: [new TextRun({ text: '—', size: 20, font: 'Manrope' })] })];
     const rows: TableRow[] = [specTitleRow('Compliance Specifics')];
     rows.push(specRow('Authorizers Under Audit', downstreamParagraphs));
     rows.push(specRow('Regulation Set', ufParagraphs(c.regulationSet)));
@@ -1198,7 +1186,11 @@ function pushTechBlockForUseCase(
 }
 
 export async function downloadDocx(poc: PocDocument) {
-  const blob = await generateDocx(poc);
+  const rawBlob = await generateDocx(poc);
+  // Post-process to embed Manrope so the doc looks correct on machines
+  // without Manrope installed. If embedding fails for any reason we serve
+  // the unembedded blob (still valid; renders in fallback font).
+  const blob = await embedManropeIntoDocx(rawBlob);
   const safe = (poc.customerName || 'POC').replace(/[^a-z0-9-_]/gi, '_');
   saveAs(blob, `PlainID_POC_${safe}.docx`);
 }
