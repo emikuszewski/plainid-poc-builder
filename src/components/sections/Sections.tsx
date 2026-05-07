@@ -666,7 +666,7 @@ export function TimelineSection({ poc, set }: SectionProps) {
   return (
     <SectionCard
       id="timeline"
-      number="05"
+      number="07"
       title="Timeline"
       description="High-level timeline summary plus 2-week sprint structure aligned to use-case clusters."
       status={status(poc, 'timeline')}
@@ -751,7 +751,7 @@ export function FrameworkSection({ poc, set }: SectionProps) {
   return (
     <SectionCard
       id="framework"
-      number="06"
+      number="08"
       title="Framework"
       description="Cadence, personas, and the named humans on both sides of the engagement."
       status={status(poc, 'framework')}
@@ -1008,7 +1008,7 @@ export function UseCasesSection({
   return (
     <SectionCard
       id="usecases"
-      number="07"
+      number="05"
       title="Use Cases"
       description="The meat of the POC. Pick from the library to drop a fully-formed use case in (snapshotted at insertion — library updates won't propagate). Then customize."
       status={status(poc, 'usecases')}
@@ -1266,7 +1266,7 @@ export function DependenciesSection({ poc, set }: SectionProps) {
   return (
     <SectionCard
       id="dependencies"
-      number="08"
+      number="09"
       title="Dependencies & Pre-Requisites"
       description="Who's responsible for what, and what's still open."
       status={status(poc, 'dependencies')}
@@ -1362,7 +1362,7 @@ export function TrackerSection({ poc, set }: SectionProps) {
   return (
     <SectionCard
       id="tracker"
-      number="09"
+      number="10"
       title="POC Tracker"
       description="Phased task list. Pre-populated from the standard PlainID engagement template — edit as needed."
       status={status(poc, 'tracker')}
@@ -1562,7 +1562,7 @@ export function DocsSection({ poc, set }: SectionProps) {
   return (
     <SectionCard
       id="docs"
-      number="10"
+      number="11"
       title="Reference Documentation"
       description="Public PlainID docs to share with the customer. Defaults are seeded — add or remove as needed."
       status={status(poc, 'docs')}
