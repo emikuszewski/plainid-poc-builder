@@ -996,12 +996,35 @@ function UseCaseTechnicalCard({
   inScopeAuthorizerIds: string[];
   onUseCaseChange: (next: UseCase) => void;
 }) {
+  // Click handler: scroll the matching Section 05 use case card into view,
+  // then flash the accent border briefly so the SE sees where they landed.
+  const editInUseCases = () => {
+    const node = document.getElementById(`uc-${uc.id}`);
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    node.classList.add('!border-[var(--color-accent)]', 'bg-[var(--color-pill-accent-bg)]');
+    window.setTimeout(() => {
+      node.classList.remove('!border-[var(--color-accent)]', 'bg-[var(--color-pill-accent-bg)]');
+    }, 1600);
+  };
+
   if (!CATEGORY_HAS_TECH_BLOCK[uc.category]) {
     return (
       <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 mb-3">
         <div className="flex items-center gap-2 mb-1">
+          <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
+            UC {index + 1}
+          </span>
           <span className="text-[13px] font-medium">{uc.title || '(untitled)'}</span>
           <Pill>{uc.category.toUpperCase()}</Pill>
+          <button
+            type="button"
+            onClick={editInUseCases}
+            className="ml-auto text-[11.5px] text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors"
+            title="Scroll to this use case in Section 05"
+          >
+            ← Edit in Section 05
+          </button>
         </div>
         <div className="text-[12px] text-[var(--color-text-dim)]">
           No technical spec for "Other" — reclassify if specs are needed.
@@ -1019,8 +1042,19 @@ function UseCaseTechnicalCard({
   return (
     <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 mb-4">
       <header className="flex items-center gap-2 mb-4 pb-3 border-b border-[var(--color-border)]">
+        <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
+          UC {index + 1}
+        </span>
         <span className="text-[14px] font-semibold">{uc.title || '(untitled)'}</span>
         <Pill tone="accent">{uc.category.toUpperCase()}</Pill>
+        <button
+          type="button"
+          onClick={editInUseCases}
+          className="ml-auto text-[11.5px] text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors"
+          title="Scroll to this use case in Section 05"
+        >
+          ← Edit in Section 05
+        </button>
       </header>
 
       <AuthorizerBlock
@@ -1091,7 +1125,7 @@ export function TechnicalSection({ poc, set }: SectionProps) {
       id="technical"
       number="06"
       title="Technical Foundation"
-      description="Authorizer config and the specs PlainID needs to integrate. Mark fields Unknown when answers aren't yet known."
+      description="Technical deployment details for each use case you defined in Section 05. The title, category, and authorizer come from there — edit those in Section 05; fill in the deployment specifics here."
       status={evaluateSection(poc, 'technical')}
     >
       <UniversalFoundationBlock foundation={foundation} onChange={setFoundation} />
@@ -1099,7 +1133,7 @@ export function TechnicalSection({ poc, set }: SectionProps) {
       {poc.useCases.length === 0 && (
         <EmptyState
           title="No use cases yet"
-          description="Add use cases in Section 05 first."
+          description="Technical Foundation cards appear here once you create use cases in Section 05. Each use case gets one card to fill in deployment details for the authorizer you picked."
         />
       )}
       {poc.useCases.length > 0 && techUseCases.length === 0 && (

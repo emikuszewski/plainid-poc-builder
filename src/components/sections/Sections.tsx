@@ -1044,7 +1044,8 @@ export function UseCasesSection({
         {poc.useCases.map((u, i) => (
           <div
             key={u.id}
-            className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4"
+            id={`uc-${u.id}`}
+            className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-300"
           >
             <header className="flex items-center gap-2 mb-3">
               <Pill tone={u.libraryId ? 'accent' : 'neutral'}>
