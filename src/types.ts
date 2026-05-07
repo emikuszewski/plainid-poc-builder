@@ -5,6 +5,15 @@ export interface InScopeSystem {
   name: string;
   focus: string;
   priority: 'P1' | 'P2' | 'P3';
+  /**
+   * The authorizer catalog entry id that this row was added from.
+   * `null` for free-text "custom" rows. Used by quote logic and to suggest
+   * the matching authorizer when use cases are created.
+   *
+   * Renaming the system label after picking does NOT clear this — the row
+   * remembers its catalog origin even if the SE customizes the display name.
+   */
+  authorizerId: string | null;
 }
 
 export interface IdentitySource {
@@ -656,4 +665,215 @@ export function authorizersForCategory(c: UseCaseCategory): AuthorizerCatalogEnt
 
 export function findAuthorizer(id: string): AuthorizerCatalogEntry | undefined {
   return AUTHORIZER_CATALOG.find((a) => a.id === id);
+}
+
+// ============================================================
+// System catalog — preset systems for the In-Scope Systems table.
+//
+// Each entry maps a customer-facing system name (Snowflake, Apigee, etc.)
+// to a default POC Focus paragraph and the authorizer it implies. Some
+// authorizers cover multiple system labels (the SQL Database Authorizer
+// covers Postgres, MSSQL, and generic SQL data sources, for example), so
+// this is a many-to-one relationship.
+//
+// The default POC Focus uses {customer} as a placeholder that gets
+// interpolated at row-add time.
+// ============================================================
+
+export interface SystemCatalogEntry {
+  id: string; // distinct from authorizerId — the system label, not the authorizer
+  name: string;
+  category: UseCaseCategory;
+  authorizerId: string;
+  defaultFocus: string;
+}
+
+export const SYSTEM_CATALOG: SystemCatalogEntry[] = [
+  // ===== Data =====
+  {
+    id: 'snowflake',
+    name: 'Snowflake',
+    category: 'Data',
+    authorizerId: 'snowflake-authorizer',
+    defaultFocus:
+      'Native Snowflake row access and column masking policies, authored in PlainID and synchronized to the {customer} Snowflake account. PlainID remains the authoring and governance surface; Snowflake performs query-time enforcement using its native engine.',
+  },
+  {
+    id: 'databricks',
+    name: 'Databricks',
+    category: 'Data',
+    authorizerId: 'databricks-authorizer',
+    defaultFocus:
+      'Unity Catalog row filters and column masks via PlainID-generated SQL UDFs. Policy is authored in the PlainID PAP and pushed to the {customer} Databricks workspace; Databricks enforces decisions at query time. Out-of-path enforcement — PlainID is not in the query path.',
+  },
+  {
+    id: 'bigquery',
+    name: 'Google BigQuery',
+    category: 'Data',
+    authorizerId: 'bigquery-authorizer',
+    defaultFocus:
+      'Row- and column-level access for BigQuery datasets via PlainID-managed views and foreign tables. Policy authored in the PlainID PAP, applied to the {customer} BigQuery project, with BigQuery performing query-time enforcement.',
+  },
+  {
+    id: 'postgres',
+    name: 'PostgreSQL',
+    category: 'Data',
+    authorizerId: 'sql-database-authorizer',
+    defaultFocus:
+      'Row- and column-level authorization for {customer} Postgres data sources via the PlainID SQL Authorizer. The Authorizer intercepts queries from a custom test application using a PlainID library, evaluates the requesting user against policy, and returns a rewritten query with the appropriate constraints applied.',
+  },
+  {
+    id: 'mssql',
+    name: 'Microsoft SQL Server',
+    category: 'Data',
+    authorizerId: 'sql-database-authorizer',
+    defaultFocus:
+      'Row- and column-level authorization for {customer} MSSQL data sources via the PlainID SQL Authorizer. Integration through a custom test application using a PlainID library; the Authorizer rewrites queries inline based on policy decisions.',
+  },
+  {
+    id: 'sql-generic',
+    name: 'SQL Data Sources (generic JDBC)',
+    category: 'Data',
+    authorizerId: 'sql-database-authorizer',
+    defaultFocus:
+      'Row- and column-level authorization via the PlainID SQL Authorizer, integrated through a custom test application using a PlainID library. The Authorizer rewrites queries inline based on policy decisions sourced from the PlainID PAP.',
+  },
+  {
+    id: 'denodo',
+    name: 'Denodo',
+    category: 'Data',
+    authorizerId: 'denodo-authorizer',
+    defaultFocus:
+      'Authorization on Denodo virtualized views. Denodo views call the PlainID PDP for runtime decisions; policy is authored centrally in the PlainID PAP.',
+  },
+  {
+    id: 'data-service-custom',
+    name: 'Custom Data Service',
+    category: 'Data',
+    authorizerId: 'data-service-sdk',
+    defaultFocus:
+      'Request enrichment and response filtering for {customer} custom data services via the PlainID Data Service SDK. The data service calls the PlainID PDP per request to evaluate access and shape responses.',
+  },
+
+  // ===== API Gateway =====
+  {
+    id: 'apigee',
+    name: 'Apigee',
+    category: 'API Gateway',
+    authorizerId: 'apigee-authorizer',
+    defaultFocus:
+      'Object-level fine-grained authorization at the gateway via the PlainID Apigee plug-in. The plug-in invokes the PlainID PDP for decisions; policy authoring stays in the PlainID PAP. No authorization logic embedded in backend services.',
+  },
+  {
+    id: 'aws-apigateway',
+    name: 'AWS API Gateway',
+    category: 'API Gateway',
+    authorizerId: 'aws-apigateway-authorizer',
+    defaultFocus:
+      'Custom Lambda authorizer fronting {customer} AWS API Gateway endpoints. The Lambda calls the PlainID PDP for fine-grained decisions per request; policy authored centrally in the PlainID PAP.',
+  },
+  {
+    id: 'azure-apim',
+    name: 'Azure API Management',
+    category: 'API Gateway',
+    authorizerId: 'azure-apim-authorizer',
+    defaultFocus:
+      'APIM inbound policy callout to the PlainID PDP for fine-grained authorization. Policy fragment deployed to the {customer} APIM instance; PlainID remains the decision authority.',
+  },
+  {
+    id: 'kong',
+    name: 'Kong',
+    category: 'API Gateway',
+    authorizerId: 'kong-authorizer',
+    defaultFocus:
+      'Kong custom plug-in invoking the PlainID PDP for object-level authorization decisions. Plug-in installed on the {customer} Kong gateway; policy authored in the PlainID PAP.',
+  },
+  {
+    id: 'istio',
+    name: 'Istio / Envoy',
+    category: 'API Gateway',
+    authorizerId: 'istio-authorizer',
+    defaultFocus:
+      'Envoy ext_authz filter calling the PlainID PDP at the service mesh boundary. Sidecar configuration in the {customer} Istio mesh; PlainID provides the decision authority for fine-grained mesh-level access control.',
+  },
+  {
+    id: 'apigw-custom',
+    name: 'Custom / Other API Gateway',
+    category: 'API Gateway',
+    authorizerId: 'apigw-rest-permit-deny',
+    defaultFocus:
+      'Permit/Deny REST integration where the {customer} gateway calls the PlainID PDP per request. Suitable for custom or unsupported gateways; integration via gateway-side plug-in or middleware code.',
+  },
+
+  // ===== AI Authorization =====
+  {
+    id: 'langchain',
+    name: 'LangChain Agent',
+    category: 'AI Authorization',
+    authorizerId: 'langchain-authorizer',
+    defaultFocus:
+      'Authorization gates inside {customer} LangChain agent workflows. The agent calls the PlainID PDP at tool-selection and RAG-retrieval boundaries; refusals are returned with explanations and decision IDs for traceability.',
+  },
+  {
+    id: 'langgraph',
+    name: 'LangGraph Agent',
+    category: 'AI Authorization',
+    authorizerId: 'langgraph-authorizer',
+    defaultFocus:
+      'Authorization at LangGraph state-machine transitions. The agent runtime calls the PlainID PDP at each transition; unauthorized transitions are blocked with explanations.',
+  },
+  {
+    id: 'mcp',
+    name: 'MCP Server',
+    category: 'AI Authorization',
+    authorizerId: 'mcp-authorizer',
+    defaultFocus:
+      'Tool-list filtering, tool-invocation authorization, and downstream resource access control at the {customer} MCP layer. The MCP server invokes the PlainID PDP at three gates: which tools to expose, whether to permit invocation, and whether to authorize downstream calls.',
+  },
+  {
+    id: 'ai-custom',
+    name: 'Custom AI Agent',
+    category: 'AI Authorization',
+    authorizerId: 'ai-rest-permit-deny',
+    defaultFocus:
+      'Permit/Deny REST integration where the {customer} agent runtime calls the PlainID PDP per gate. Suitable for custom or homegrown agent runtimes outside the standard MCP / LangChain / LangGraph patterns.',
+  },
+
+  // ===== Application =====
+  {
+    id: 'spring-boot',
+    name: 'Java Spring Boot Application',
+    category: 'Application',
+    authorizerId: 'app-spring-boot-sdk',
+    defaultFocus:
+      'In-app fine-grained authorization in {customer} Spring Boot applications via the PlainID Java SDK. The SDK is embedded as a Maven dependency; the application calls the PlainID PDP at protected resource boundaries.',
+  },
+  {
+    id: 'dotnet',
+    name: '.NET Application',
+    category: 'Application',
+    authorizerId: 'app-dotnet-sdk',
+    defaultFocus:
+      'In-app fine-grained authorization in {customer} .NET applications via the PlainID .NET SDK. The SDK is referenced as a NuGet package; the application calls the PlainID PDP at protected resource boundaries.',
+  },
+  {
+    id: 'app-rest',
+    name: 'Custom Application (REST)',
+    category: 'Application',
+    authorizerId: 'app-rest-permit-deny',
+    defaultFocus:
+      'Permit/Deny REST integration where the {customer} application calls the PlainID PDP via HTTP per protected operation. Language-agnostic integration via any HTTP client; client-side caching recommended.',
+  },
+  {
+    id: 'app-policy-resolution',
+    name: 'Application — Policy Resolution',
+    category: 'Application',
+    authorizerId: 'app-rest-policy-resolution',
+    defaultFocus:
+      'Policy Resolution REST integration where the {customer} application requests the asset list a user can access in one call. Best for large-scale data scenarios or list/dashboard surfaces where pre-filtering at retrieval beats per-item permit/deny checks.',
+  },
+];
+
+export function findSystemEntry(id: string): SystemCatalogEntry | undefined {
+  return SYSTEM_CATALOG.find((s) => s.id === id);
 }

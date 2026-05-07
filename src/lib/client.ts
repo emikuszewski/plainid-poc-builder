@@ -55,7 +55,11 @@ export function fromRecord(r: any): PocDocument {
 
     tenantStrategyChoice: (r.tenantStrategyChoice ?? '') as PocDocument['tenantStrategyChoice'],
     tenantStrategy: r.tenantStrategy ?? '',
-    inScopeSystems: parseJson<InScopeSystem[]>(r.inScopeSystems, []),
+    inScopeSystems: parseJson<InScopeSystem[]>(r.inScopeSystems, []).map((s) => ({
+      ...s,
+      // Backfill authorizerId on rows saved before the field existed.
+      authorizerId: s.authorizerId ?? null,
+    })),
     identitySources: parseJson<IdentitySource[]>(r.identitySources, []),
     architectureConstraints: r.architectureConstraints ?? '',
     outOfScope: r.outOfScope ?? '',

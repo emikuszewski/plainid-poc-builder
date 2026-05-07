@@ -208,12 +208,19 @@ function AuthorizerBlock({
   uc,
   spec,
   allUseCases,
+  inScopeAuthorizerIds,
   onChange,
   onCopyFrom,
 }: {
   uc: UseCase;
   spec: AuthorizerSpec;
   allUseCases: UseCase[];
+  /**
+   * IDs of authorizers that the SE has marked as in-scope via the In-Scope
+   * Systems table. Used to suggest the matching authorizer in this dropdown
+   * — selection is loose (a hint), not enforced.
+   */
+  inScopeAuthorizerIds: string[];
   onChange: (next: AuthorizerSpec) => void;
   onCopyFrom: (sourceUseCaseId: string) => void;
 }) {
@@ -273,14 +280,24 @@ function AuthorizerBlock({
           value={spec.selectedAuthorizerId}
           onChange={(e) => setSelected(e.target.value)}
         >
-          {catalogForCategory.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
+          {catalogForCategory.map((a) => {
+            const inScope = inScopeAuthorizerIds.includes(a.id);
+            return (
+              <option key={a.id} value={a.id}>
+                {inScope ? '✓ ' : ''}
+                {a.name}
+                {inScope ? ' — in scope' : ''}
+              </option>
+            );
+          })}
           <option value="custom">Other / Custom…</option>
         </select>
       </Field>
+      {inScopeAuthorizerIds.length > 0 && !inScopeAuthorizerIds.includes(spec.selectedAuthorizerId) && spec.selectedAuthorizerId !== 'custom' && (
+        <div className="-mt-2 mb-3 text-[11.5px] text-[var(--color-warning)] leading-relaxed">
+          Heads up — this authorizer isn't listed in the In-Scope Systems table. Verify the use case maps to a system that's actually in scope, or update Section 04.
+        </div>
+      )}
 
       {selectedEntry && (
         <div className="-mt-2 mb-4 text-[11.5px] text-[var(--color-text-muted)] leading-relaxed">
@@ -970,11 +987,13 @@ function UseCaseTechnicalCard({
   uc,
   index,
   allUseCases,
+  inScopeAuthorizerIds,
   onUseCaseChange,
 }: {
   uc: UseCase;
   index: number;
   allUseCases: UseCase[];
+  inScopeAuthorizerIds: string[];
   onUseCaseChange: (next: UseCase) => void;
 }) {
   if (!CATEGORY_HAS_TECH_BLOCK[uc.category]) {
@@ -1008,6 +1027,7 @@ function UseCaseTechnicalCard({
         uc={uc}
         spec={spec.authorizer}
         allUseCases={allUseCases}
+        inScopeAuthorizerIds={inScopeAuthorizerIds}
         onChange={(next) => setSpec({ ...spec, authorizer: next })}
         onCopyFrom={(sourceId) => {
           const source = allUseCases.find((u) => u.id === sourceId);
@@ -1094,6 +1114,9 @@ export function TechnicalSection({ poc, set }: SectionProps) {
           uc={uc}
           index={i}
           allUseCases={poc.useCases}
+          inScopeAuthorizerIds={poc.inScopeSystems
+            .map((s) => s.authorizerId)
+            .filter((id): id is string => !!id)}
           onUseCaseChange={updateUseCase}
         />
       ))}

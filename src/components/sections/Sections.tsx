@@ -10,7 +10,10 @@ import type {
   TrackerRow,
   ReferenceDoc,
   UseCaseLibraryEntry,
+  SystemCatalogEntry,
+  UseCaseCategory,
 } from '../../types';
+import { SYSTEM_CATALOG } from '../../types';
 import { Field, Button, SectionCard, Pill, EmptyState, Modal } from '../ui/Primitives';
 import { AiButton } from '../ui/AiButton';
 import { evaluateSection } from '../../lib/completeness';
@@ -253,13 +256,37 @@ Role consolidation mechanics — how legacy roles map into policies`}
 // ============================================================
 export function DiscoverySection({ poc, set }: SectionProps) {
   const archSuggest = useFieldSuggest('architectureConstraints', poc, set, poc.id);
+  const [systemPickerOpen, setSystemPickerOpen] = useState(false);
+  const [systemFilter, setSystemFilter] = useState('');
+
+  // Blank-row fallback for fully custom in-scope systems.
   const addSystem = () =>
     set({
       inScopeSystems: [
         ...poc.inScopeSystems,
-        { id: uid(), name: '', focus: '', priority: 'P1' as const },
+        { id: uid(), name: '', focus: '', priority: 'P1' as const, authorizerId: null },
       ],
     });
+
+  // Add a row pre-filled from the system catalog. Customer name is
+  // interpolated into the default POC focus paragraph at this point;
+  // afterwards the focus is just text that the SE can edit freely.
+  const addSystemFromCatalog = (entry: SystemCatalogEntry) => {
+    const customer = poc.customerName.trim() || 'the customer';
+    set({
+      inScopeSystems: [
+        ...poc.inScopeSystems,
+        {
+          id: uid(),
+          name: entry.name,
+          focus: entry.defaultFocus.replace(/\{customer\}/g, customer),
+          priority: 'P1' as const,
+          authorizerId: entry.authorizerId,
+        },
+      ],
+    });
+  };
+
   const updateSystem = (id: string, patch: Partial<InScopeSystem>) =>
     set({
       inScopeSystems: poc.inScopeSystems.map((s) => (s.id === id ? { ...s, ...patch } : s)),
@@ -372,9 +399,14 @@ export function DiscoverySection({ poc, set }: SectionProps) {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <label>In-scope systems &amp; platforms</label>
-          <Button size="sm" onClick={addSystem}>
-            + Add system
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => setSystemPickerOpen(true)}>
+              + Pick from catalog
+            </Button>
+            <Button size="sm" variant="ghost" onClick={addSystem}>
+              + Custom
+            </Button>
+          </div>
         </div>
         {poc.inScopeSystems.length === 0 && (
           <EmptyState
@@ -497,6 +529,85 @@ Native SQL client integration — production pattern documented but not validate
 Agentic AI use cases — tracked separately`}
         />
       </Field>
+
+      {/* System catalog picker */}
+      <Modal
+        open={systemPickerOpen}
+        onClose={() => {
+          setSystemPickerOpen(false);
+          setSystemFilter('');
+        }}
+        title="Pick a system to add"
+        width={760}
+      >
+        <p className="text-[12.5px] text-[var(--color-text-muted)] mb-3 leading-relaxed">
+          Each entry pre-fills the row with a default POC focus paragraph
+          (editable after) and tracks the matching authorizer for quote and
+          use-case workflows.
+        </p>
+        <Field label="Search">
+          <input
+            type="text"
+            value={systemFilter}
+            onChange={(e) => setSystemFilter(e.target.value)}
+            placeholder="snowflake, apigee, langchain, …"
+            autoFocus
+          />
+        </Field>
+        <div className="mt-3 max-h-[480px] overflow-y-auto pr-1">
+          {(['Data', 'API Gateway', 'AI Authorization', 'Application'] as UseCaseCategory[]).map(
+            (cat) => {
+              const filterLower = systemFilter.trim().toLowerCase();
+              const items = SYSTEM_CATALOG.filter(
+                (s) =>
+                  s.category === cat &&
+                  (!filterLower ||
+                    s.name.toLowerCase().includes(filterLower) ||
+                    s.defaultFocus.toLowerCase().includes(filterLower)),
+              );
+              if (items.length === 0) return null;
+              return (
+                <div key={cat} className="mb-4 last:mb-0">
+                  <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-1.5">
+                    {cat.toUpperCase()}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {items.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          addSystemFromCatalog(s);
+                          setSystemPickerOpen(false);
+                          setSystemFilter('');
+                        }}
+                        className="text-left p-2.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                      >
+                        <div className="text-[12.5px] font-medium text-[var(--color-text)] mb-0.5">
+                          {s.name}
+                        </div>
+                        <div className="text-[11px] text-[var(--color-text-muted)] line-clamp-2 leading-snug">
+                          {s.defaultFocus.replace(/\{customer\}/g, poc.customerName.trim() || 'the customer')}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            },
+          )}
+          {SYSTEM_CATALOG.filter(
+            (s) =>
+              !systemFilter.trim() ||
+              s.name.toLowerCase().includes(systemFilter.trim().toLowerCase()) ||
+              s.defaultFocus.toLowerCase().includes(systemFilter.trim().toLowerCase()),
+          ).length === 0 && (
+            <div className="py-8 text-center text-[12px] text-[var(--color-text-muted)]">
+              No systems match — use the Custom button to add a free-form entry.
+            </div>
+          )}
+        </div>
+      </Modal>
     </SectionCard>
   );
 }
