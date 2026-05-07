@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type {
   PocDocument,
   InScopeSystem,
@@ -67,6 +67,39 @@ function useFieldSuggest(
     }
   };
   return { loading, button: <AiButton onRun={onRun} loading={loading} /> };
+}
+
+/**
+ * Focus management for "+ Add" actions on long lists.
+ *
+ * When a list grows (by length), focuses the input or textarea attached to
+ * `lastItemRef`. The element should be the first editable field of the
+ * newly-appended item. The browser auto-scrolls the focused element into
+ * view, which doubles as visual confirmation that the row was added.
+ *
+ * Usage:
+ *   const ref = useFocusOnAppend(items.length);
+ *   ...
+ *   {items.map((item, i) => (
+ *     <input ref={i === items.length - 1 ? ref : undefined} ... />
+ *   ))}
+ *
+ * The first render is a no-op (we only focus on growth, not initial mount),
+ * so existing data doesn't grab focus when a POC opens.
+ */
+function useFocusOnAppend(length: number) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  const previousLength = useRef(length);
+  useEffect(() => {
+    if (length > previousLength.current && ref.current) {
+      // Defer to next frame so the new node has rendered with the ref attached.
+      requestAnimationFrame(() => {
+        ref.current?.focus({ preventScroll: false });
+      });
+    }
+    previousLength.current = length;
+  }, [length]);
+  return ref;
 }
 
 // ============================================================
@@ -258,6 +291,8 @@ export function DiscoverySection({ poc, set }: SectionProps) {
   const archSuggest = useFieldSuggest('architectureConstraints', poc, set, poc.id);
   const [systemPickerOpen, setSystemPickerOpen] = useState(false);
   const [systemFilter, setSystemFilter] = useState('');
+  const systemFocusRef = useFocusOnAppend(poc.inScopeSystems.length);
+  const identityFocusRef = useFocusOnAppend(poc.identitySources.length);
 
   // Blank-row fallback for fully custom in-scope systems.
   const addSystem = () =>
@@ -415,12 +450,13 @@ export function DiscoverySection({ poc, set }: SectionProps) {
           />
         )}
         <div className="space-y-2">
-          {poc.inScopeSystems.map((s) => (
+          {poc.inScopeSystems.map((s, idx) => (
             <div
               key={s.id}
               className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
             >
               <input
+                ref={idx === poc.inScopeSystems.length - 1 ? systemFocusRef : undefined}
                 className="col-span-3"
                 placeholder="System name"
                 value={s.name}
@@ -465,12 +501,13 @@ export function DiscoverySection({ poc, set }: SectionProps) {
           </Button>
         </div>
         <div className="space-y-2">
-          {poc.identitySources.map((s) => (
+          {poc.identitySources.map((s, idx) => (
             <div
               key={s.id}
               className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
             >
               <input
+                ref={idx === poc.identitySources.length - 1 ? identityFocusRef : undefined}
                 className="col-span-3"
                 placeholder="Name (e.g. Ping Identity)"
                 value={s.name}
@@ -616,6 +653,7 @@ Agentic AI use cases — tracked separately`}
 // 05 — Timeline
 // ============================================================
 export function TimelineSection({ poc, set }: SectionProps) {
+  const sprintFocusRef = useFocusOnAppend(poc.sprints.length);
   const addSprint = () =>
     set({
       sprints: [...poc.sprints, { id: uid(), phase: '', weeks: '', focus: '' }],
@@ -647,12 +685,13 @@ export function TimelineSection({ poc, set }: SectionProps) {
         </Button>
       </div>
       <div className="space-y-2">
-        {poc.sprints.map((s) => (
+        {poc.sprints.map((s, idx) => (
           <div
             key={s.id}
             className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
           >
             <input
+              ref={idx === poc.sprints.length - 1 ? sprintFocusRef : undefined}
               className="col-span-2"
               placeholder="Sprint 0"
               value={s.phase}
@@ -689,6 +728,8 @@ export function TimelineSection({ poc, set }: SectionProps) {
 // 06 — Framework
 // ============================================================
 export function FrameworkSection({ poc, set }: SectionProps) {
+  const personaFocusRef = useFocusOnAppend(poc.personas.length);
+  const memberFocusRef = useFocusOnAppend(poc.teamMembers.length);
   const addPersona = () =>
     set({ personas: [...poc.personas, { id: uid(), name: '', description: '' }] });
   const updatePersona = (id: string, patch: Partial<Persona>) =>
@@ -730,12 +771,13 @@ export function FrameworkSection({ poc, set }: SectionProps) {
         </Button>
       </div>
       <div className="space-y-2 mb-6">
-        {poc.personas.map((p) => (
+        {poc.personas.map((p, idx) => (
           <div
             key={p.id}
             className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
           >
             <input
+              ref={idx === poc.personas.length - 1 ? personaFocusRef : undefined}
               className="col-span-3"
               placeholder="Name"
               value={p.name}
@@ -771,7 +813,7 @@ export function FrameworkSection({ poc, set }: SectionProps) {
         </div>
       </div>
       <div className="space-y-2">
-        {poc.teamMembers.map((m) => (
+        {poc.teamMembers.map((m, idx) => (
           <div
             key={m.id}
             className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
@@ -783,6 +825,7 @@ export function FrameworkSection({ poc, set }: SectionProps) {
               onChange={(e) => updateMember(m.id, { org: e.target.value })}
             />
             <input
+              ref={idx === poc.teamMembers.length - 1 ? memberFocusRef : undefined}
               className="col-span-3"
               placeholder="Name"
               value={m.name}
@@ -828,6 +871,7 @@ export function UseCasesSection({
   library: UseCaseLibraryEntry[];
   onOpenLibraryPicker: () => void;
 }) {
+  const useCaseFocusRef = useFocusOnAppend(poc.useCases.length);
   const addBlank = () =>
     set({
       useCases: [
@@ -1021,6 +1065,7 @@ export function UseCasesSection({
             </header>
             <Field label="Title" required>
               <input
+                ref={i === poc.useCases.length - 1 ? useCaseFocusRef : undefined}
                 value={u.title}
                 onChange={(e) => update(u.id, { title: e.target.value })}
               />
@@ -1262,6 +1307,7 @@ Lead authorizer configuration and integration testing`}
 // 09 — Tracker
 // ============================================================
 export function TrackerSection({ poc, set }: SectionProps) {
+  const trackerFocusRef = useFocusOnAppend(poc.tracker.length);
   const addRow = () =>
     set({
       tracker: [
@@ -1350,10 +1396,11 @@ export function TrackerSection({ poc, set }: SectionProps) {
             </tr>
           </thead>
           <tbody>
-            {poc.tracker.map((t) => (
+            {poc.tracker.map((t, idx) => (
               <tr key={t.id} className="border-t border-[var(--color-border)] group">
                 <td className="py-1 pr-2">
                   <input
+                    ref={idx === poc.tracker.length - 1 ? trackerFocusRef : undefined}
                     className="!h-7 !text-[12px]"
                     value={t.phase}
                     onChange={(e) => update(t.id, { phase: e.target.value })}
@@ -1497,6 +1544,7 @@ export function TrackerSection({ poc, set }: SectionProps) {
 // 10 — Reference Documentation
 // ============================================================
 export function DocsSection({ poc, set }: SectionProps) {
+  const docFocusRef = useFocusOnAppend(poc.referenceDocs.length);
   const addDoc = () =>
     set({
       referenceDocs: [
@@ -1525,12 +1573,13 @@ export function DocsSection({ poc, set }: SectionProps) {
         </Button>
       </div>
       <div className="space-y-2">
-        {poc.referenceDocs.map((d) => (
+        {poc.referenceDocs.map((d, idx) => (
           <div
             key={d.id}
             className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
           >
             <input
+              ref={idx === poc.referenceDocs.length - 1 ? docFocusRef : undefined}
               className="col-span-4"
               placeholder="Title"
               value={d.title}
