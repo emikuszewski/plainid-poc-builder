@@ -306,7 +306,14 @@ Return STRICT JSON in this shape, no preamble, no Markdown fences:
 
 Order issues by severity (critical first). Aim for 4–10 issues total — not a checklist, only real problems. If something is genuinely good, mention it under strengths.`;
 
-  return { system: SE_SYSTEM, prompt, maxTokens: 3500 };
+  // 2000 token cap on the review output. Rationale: the prompt asks for
+  // a 1-2 sentence summary, 4-10 issues at ~50-100 words each, and 2-4 brief
+  // strengths. Realistic output is ~1500 tokens; 2000 gives ~33% headroom.
+  // Hard ceiling chosen to keep total round-trip under AppSync's 30s
+  // synchronous-resolver timeout (Sonnet generates ~65 tok/s, so 2000 tok ≈
+  // 30s generation; combined with ~2s overhead and ~2s prefill, full call
+  // lands around ~25-28s for typical reviews).
+  return { system: SE_SYSTEM, prompt, maxTokens: 2000 };
 }
 
 export interface ReviewIssue {
