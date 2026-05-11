@@ -211,7 +211,7 @@ export function renderHtml(poc: PocDocument, opts: { standalone?: boolean } = {}
           ? `<table><thead><tr><th>System / Platform</th><th>POC Focus</th><th>Priority</th></tr></thead><tbody>${inScopeRows}</tbody></table>`
           : '<p><em>None defined.</em></p>'
       }
-      <h3>Identity Infrastructure</h3>
+      <h3>Identity Providers</h3>
       ${idRows ? `<ul>${idRows}</ul>` : '<p><em>None defined.</em></p>'}
       ${
         poc.architectureConstraints

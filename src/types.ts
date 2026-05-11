@@ -21,6 +21,12 @@ export interface IdentitySource {
   name: string;
   type: string; // e.g. "Primary IdP", "IGA", "Directory"
   notes: string;
+  /**
+   * The identity-provider catalog entry id this row was added from.
+   * `null` for free-text "custom" rows. Renaming the display name after
+   * picking doesn't clear this — the row remembers its catalog origin.
+   */
+  catalogId: string | null;
 }
 
 export interface Sprint {
@@ -876,4 +882,166 @@ export const SYSTEM_CATALOG: SystemCatalogEntry[] = [
 
 export function findSystemEntry(id: string): SystemCatalogEntry | undefined {
   return SYSTEM_CATALOG.find((s) => s.id === id);
+}
+
+// ============================================================
+// Identity Provider catalog — preset entries for the Identity Providers
+// table in Section 04 (Discovery).
+//
+// "providerType" categorizes the entry for display grouping. It is NOT
+// the same as the `IdentitySource.type` field (that's the row-level type
+// the SE sees). When a catalog entry is picked, the row's `type` is set
+// from `defaultType`.
+// ============================================================
+
+export type IdpProviderType = 'Cloud IdP' | 'Directory' | 'IGA';
+
+export interface IdentityProviderCatalogEntry {
+  id: string;
+  name: string;
+  providerType: IdpProviderType;
+  defaultType: string; // populates IdentitySource.type when picked
+  defaultNotes: string; // populates IdentitySource.notes when picked
+}
+
+export const IDENTITY_PROVIDER_CATALOG: IdentityProviderCatalogEntry[] = [
+  // ===== Cloud IdPs =====
+  {
+    id: 'okta',
+    name: 'Okta',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC; JWT-based. Consumed by PlainID PDP for user context and claims. Standard issuer and JWKS configuration.',
+  },
+  {
+    id: 'entra',
+    name: 'Microsoft Entra ID',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC; JWT-based. Consumed by PlainID PDP for user context and claims. Standard issuer and JWKS configuration.',
+  },
+  {
+    id: 'ping-pingone',
+    name: 'PingOne',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC; JWT-based. Consumed by PlainID PDP for user context and claims. Verify claim mapping during integration.',
+  },
+  {
+    id: 'ping-pingfederate',
+    name: 'PingFederate',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC/SAML; JWT-based. Consumed by PlainID PDP for user context and claims. Verify claim mapping during integration.',
+  },
+  {
+    id: 'auth0',
+    name: 'Auth0',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC; JWT-based. Consumed by PlainID PDP for user context and claims. Standard issuer and JWKS configuration.',
+  },
+  {
+    id: 'forgerock',
+    name: 'ForgeRock',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC/SAML; JWT-based. Consumed by PlainID PDP for user context and claims. Verify claim mapping during integration.',
+  },
+  {
+    id: 'onelogin',
+    name: 'OneLogin',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC; JWT-based. Consumed by PlainID PDP for user context and claims.',
+  },
+  {
+    id: 'google-workspace',
+    name: 'Google Workspace',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC; JWT-based. Consumed by PlainID PDP for user context and claims.',
+  },
+  {
+    id: 'oidc-other',
+    name: 'Other OIDC Provider',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'OIDC; JWT-based. Standard issuer and JWKS configuration required for PDP integration.',
+  },
+  {
+    id: 'saml-other',
+    name: 'Other SAML Provider',
+    providerType: 'Cloud IdP',
+    defaultType: 'Primary IdP',
+    defaultNotes:
+      'SAML-based. Token exchange or claim translation pattern to be confirmed during integration.',
+  },
+
+  // ===== Directories =====
+  {
+    id: 'active-directory',
+    name: 'Active Directory',
+    providerType: 'Directory',
+    defaultType: 'Directory',
+    defaultNotes:
+      'On-prem AD. Referenced as part of the broader identity landscape; may serve as attribute source via PIP rather than direct IdP integration.',
+  },
+  {
+    id: 'ldap-generic',
+    name: 'LDAP (generic)',
+    providerType: 'Directory',
+    defaultType: 'Directory',
+    defaultNotes:
+      'Referenced as part of the broader identity landscape; may serve as attribute source via PIP rather than direct IdP integration.',
+  },
+
+  // ===== IGA =====
+  {
+    id: 'sailpoint',
+    name: 'SailPoint',
+    providerType: 'IGA',
+    defaultType: 'IGA',
+    defaultNotes:
+      'Identity governance system referenced as part of the broader identity landscape. Not in scope as a direct integration for this POC; role/entitlement data may be sourced for policy modeling.',
+  },
+  {
+    id: 'saviynt',
+    name: 'Saviynt',
+    providerType: 'IGA',
+    defaultType: 'IGA',
+    defaultNotes:
+      'Identity governance system referenced as part of the broader identity landscape. Not in scope as a direct integration for this POC; role/entitlement data may be sourced for policy modeling.',
+  },
+  {
+    id: 'cyberark',
+    name: 'CyberArk',
+    providerType: 'IGA',
+    defaultType: 'IGA',
+    defaultNotes:
+      'Privileged access management referenced as part of the broader identity landscape. Not in scope as a direct integration for this POC.',
+  },
+  {
+    id: 'entra-id-governance',
+    name: 'Microsoft Entra ID Governance',
+    providerType: 'IGA',
+    defaultType: 'IGA',
+    defaultNotes:
+      'Identity governance system referenced as part of the broader identity landscape.',
+  },
+];
+
+export function findIdentityProviderEntry(
+  id: string,
+): IdentityProviderCatalogEntry | undefined {
+  return IDENTITY_PROVIDER_CATALOG.find((e) => e.id === id);
 }

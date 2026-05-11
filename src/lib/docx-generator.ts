@@ -423,7 +423,7 @@ export async function generateDocx(poc: PocDocument): Promise<Blob> {
   }
 
   if (poc.identitySources.length) {
-    children.push(heading('Identity Infrastructure', HeadingLevel.HEADING_2));
+    children.push(heading('Identity Providers', HeadingLevel.HEADING_2));
     children.push(
       ...poc.identitySources.map(
         (s) =>

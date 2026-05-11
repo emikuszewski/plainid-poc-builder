@@ -60,7 +60,11 @@ export function fromRecord(r: any): PocDocument {
       // Backfill authorizerId on rows saved before the field existed.
       authorizerId: s.authorizerId ?? null,
     })),
-    identitySources: parseJson<IdentitySource[]>(r.identitySources, []),
+    identitySources: parseJson<IdentitySource[]>(r.identitySources, []).map((s) => ({
+      ...s,
+      // Backfill catalogId on rows saved before the field existed.
+      catalogId: s.catalogId ?? null,
+    })),
     architectureConstraints: r.architectureConstraints ?? '',
     outOfScope: r.outOfScope ?? '',
 

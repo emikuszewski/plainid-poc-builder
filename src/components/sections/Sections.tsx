@@ -12,8 +12,10 @@ import type {
   UseCaseLibraryEntry,
   SystemCatalogEntry,
   UseCaseCategory,
+  IdentityProviderCatalogEntry,
+  IdpProviderType,
 } from '../../types';
-import { SYSTEM_CATALOG } from '../../types';
+import { SYSTEM_CATALOG, IDENTITY_PROVIDER_CATALOG } from '../../types';
 import { Field, Button, SectionCard, Pill, EmptyState, Modal } from '../ui/Primitives';
 import { AiButton } from '../ui/AiButton';
 import { evaluateSection } from '../../lib/completeness';
@@ -329,13 +331,33 @@ export function DiscoverySection({ poc, set }: SectionProps) {
   const removeSystem = (id: string) =>
     set({ inScopeSystems: poc.inScopeSystems.filter((s) => s.id !== id) });
 
+  // Identity provider picker — same shape as the system catalog picker.
+  const [idpPickerOpen, setIdpPickerOpen] = useState(false);
+  const [idpFilter, setIdpFilter] = useState('');
+
   const addIdentity = () =>
     set({
       identitySources: [
         ...poc.identitySources,
-        { id: uid(), name: '', type: '', notes: '' },
+        { id: uid(), name: '', type: '', notes: '', catalogId: null },
       ],
     });
+
+  const addIdentityFromCatalog = (entry: IdentityProviderCatalogEntry) => {
+    set({
+      identitySources: [
+        ...poc.identitySources,
+        {
+          id: uid(),
+          name: entry.name,
+          type: entry.defaultType,
+          notes: entry.defaultNotes,
+          catalogId: entry.id,
+        },
+      ],
+    });
+  };
+
   const updateIdentity = (id: string, patch: Partial<IdentitySource>) =>
     set({
       identitySources: poc.identitySources.map((s) => (s.id === id ? { ...s, ...patch } : s)),
@@ -495,10 +517,15 @@ export function DiscoverySection({ poc, set }: SectionProps) {
 
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
-          <label>Identity infrastructure</label>
-          <Button size="sm" onClick={addIdentity}>
-            + Add source
-          </Button>
+          <label>Identity Providers</label>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => setIdpPickerOpen(true)}>
+              + Pick from catalog
+            </Button>
+            <Button size="sm" variant="ghost" onClick={addIdentity}>
+              + Custom
+            </Button>
+          </div>
         </div>
         <div className="space-y-2">
           {poc.identitySources.map((s, idx) => (
@@ -641,6 +668,85 @@ Agentic AI use cases — tracked separately`}
           ).length === 0 && (
             <div className="py-8 text-center text-[12px] text-[var(--color-text-muted)]">
               No systems match — use the Custom button to add a free-form entry.
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Identity Provider catalog picker */}
+      <Modal
+        open={idpPickerOpen}
+        onClose={() => {
+          setIdpPickerOpen(false);
+          setIdpFilter('');
+        }}
+        title="Pick an identity provider"
+        width={720}
+      >
+        <p className="text-[12.5px] text-[var(--color-text-muted)] mb-3 leading-relaxed">
+          Each entry pre-fills the row with a standard notes paragraph (editable after).
+        </p>
+        <Field label="Search">
+          <input
+            type="text"
+            value={idpFilter}
+            onChange={(e) => setIdpFilter(e.target.value)}
+            placeholder="okta, sailpoint, active directory, …"
+            autoFocus
+          />
+        </Field>
+        <div className="mt-3 max-h-[480px] overflow-y-auto pr-1">
+          {(['Cloud IdP', 'Directory', 'IGA'] as IdpProviderType[]).map((ptype) => {
+            const filterLower = idpFilter.trim().toLowerCase();
+            const items = IDENTITY_PROVIDER_CATALOG.filter(
+              (e) =>
+                e.providerType === ptype &&
+                (!filterLower ||
+                  e.name.toLowerCase().includes(filterLower) ||
+                  e.defaultNotes.toLowerCase().includes(filterLower)),
+            );
+            if (items.length === 0) return null;
+            return (
+              <div key={ptype} className="mb-4 last:mb-0">
+                <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-1.5">
+                  {ptype === 'Cloud IdP'
+                    ? 'CLOUD IDPS'
+                    : ptype === 'Directory'
+                      ? 'DIRECTORIES'
+                      : 'IGA'}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {items.map((e) => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => {
+                        addIdentityFromCatalog(e);
+                        setIdpPickerOpen(false);
+                        setIdpFilter('');
+                      }}
+                      className="text-left p-2.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                    >
+                      <div className="text-[12.5px] font-medium text-[var(--color-text)] mb-0.5">
+                        {e.name}
+                      </div>
+                      <div className="text-[11px] text-[var(--color-text-muted)] line-clamp-2 leading-snug">
+                        {e.defaultType} — {e.defaultNotes}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {IDENTITY_PROVIDER_CATALOG.filter(
+            (e) =>
+              !idpFilter.trim() ||
+              e.name.toLowerCase().includes(idpFilter.trim().toLowerCase()) ||
+              e.defaultNotes.toLowerCase().includes(idpFilter.trim().toLowerCase()),
+          ).length === 0 && (
+            <div className="py-8 text-center text-[12px] text-[var(--color-text-muted)]">
+              No identity providers match — use the Custom button to add a free-form entry.
             </div>
           )}
         </div>
