@@ -287,6 +287,14 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
   const all = evaluateAll(poc);
   const overall = overallCompleteness(poc);
 
+  // Open-items modal — opened from either the "N OPEN" badge or the
+  // "+ N more" tail of the sidebar blockers preview.
+  const [openItemsModalOpen, setOpenItemsModalOpen] = useState(false);
+  const openSections = all.filter((s) => s.issues.length > 0);
+  // Map id -> SectionMeta so we can render labels in the modal and find
+  // DOM ids for the scroll-into-view "jump" affordance.
+  const sectionMetaById = new Map(SECTIONS.map((s) => [s.id, s]));
+
   const filteredLibrary = library.filter((e) =>
     libraryFilter === 'All' ? true : e.category === libraryFilter,
   );
@@ -356,16 +364,26 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
           </div>
           {overall.blockers.length > 0 && (
             <div className="mt-3 text-[11px] text-[var(--color-text-dim)] leading-snug">
-              <div className="mono text-[9px] tracking-widest text-[var(--color-warning)] mb-1">
+              <button
+                type="button"
+                onClick={() => setOpenItemsModalOpen(true)}
+                className="mono text-[9px] tracking-widest text-[var(--color-warning)] mb-1 hover:underline cursor-pointer"
+              >
                 {overall.blockers.length} OPEN
-              </div>
+              </button>
               <ul className="space-y-0.5">
                 {overall.blockers.slice(0, 4).map((b, i) => (
                   <li key={i}>· {b}</li>
                 ))}
                 {overall.blockers.length > 4 && (
-                  <li className="text-[var(--color-text-faint)]">
-                    + {overall.blockers.length - 4} more
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => setOpenItemsModalOpen(true)}
+                      className="text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)] hover:underline cursor-pointer"
+                    >
+                      + {overall.blockers.length - 4} more
+                    </button>
                   </li>
                 )}
               </ul>
@@ -674,6 +692,80 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
               setReview(null);
             }}
           >
+            Close
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Open items modal — full list grouped by section */}
+      <Modal
+        open={openItemsModalOpen}
+        onClose={() => setOpenItemsModalOpen(false)}
+        title={`Open items · ${overall.blockers.length}`}
+        width={640}
+      >
+        <p className="text-[12.5px] text-[var(--color-text-muted)] mb-4 leading-relaxed">
+          Everything still missing or thin in this POC, grouped by section. Click a
+          section name to jump to it in the editor.
+        </p>
+        {openSections.length === 0 ? (
+          <div className="py-8 text-center text-[12.5px] text-[var(--color-text-muted)]">
+            Nothing open — this POC is complete.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {openSections.map((s) => {
+              const meta = sectionMetaById.get(s.id);
+              return (
+                <div key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Scroll to the section in the editor and briefly flash
+                      // its border so the SE sees where they landed.
+                      const node = document.getElementById(s.id);
+                      if (!node) return;
+                      setOpenItemsModalOpen(false);
+                      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      node.classList.add(
+                        'bg-[var(--color-pill-accent-bg)]',
+                        'transition-colors',
+                        'duration-500',
+                        'rounded-md',
+                      );
+                      window.setTimeout(() => {
+                        node.classList.remove(
+                          'bg-[var(--color-pill-accent-bg)]',
+                          'rounded-md',
+                        );
+                      }, 1600);
+                    }}
+                    className="flex items-baseline gap-2 mb-1.5 group cursor-pointer"
+                  >
+                    <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
+                      {meta?.shortLabel ?? s.id.toUpperCase()}
+                    </span>
+                    <span className="text-[13px] font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
+                      {meta?.label ?? s.id}
+                    </span>
+                    <span className="mono text-[10px] tracking-widest text-[var(--color-warning)]">
+                      {s.issues.length} {s.issues.length === 1 ? 'ITEM' : 'ITEMS'}
+                    </span>
+                  </button>
+                  <ul className="space-y-0.5 ml-1 text-[12px] text-[var(--color-text-muted)]">
+                    {s.issues.map((issue, i) => (
+                      <li key={i} className="leading-snug">
+                        · {issue}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-[var(--color-border)]">
+          <Button variant="ghost" onClick={() => setOpenItemsModalOpen(false)}>
             Close
           </Button>
         </div>
