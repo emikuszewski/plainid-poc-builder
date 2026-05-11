@@ -73,7 +73,11 @@ export function fromRecord(r: any): PocDocument {
 
     cadence: r.cadence ?? '',
     personas: parseJson<Persona[]>(r.personas, []),
-    teamMembers: parseJson<TeamMember[]>(r.teamMembers, []),
+    teamMembers: parseJson<TeamMember[]>(r.teamMembers, []).map((m) => ({
+      ...m,
+      // Backfill catalogId on rows saved before the field existed.
+      catalogId: m.catalogId ?? null,
+    })),
 
     useCases: parseJson<UseCase[]>(r.useCases, []),
     technicalFoundation: r.technicalFoundation

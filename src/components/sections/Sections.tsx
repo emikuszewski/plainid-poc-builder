@@ -14,8 +14,13 @@ import type {
   UseCaseCategory,
   IdentityProviderCatalogEntry,
   IdpProviderType,
+  PlainIdTeamCatalogEntry,
 } from '../../types';
-import { SYSTEM_CATALOG, IDENTITY_PROVIDER_CATALOG } from '../../types';
+import {
+  SYSTEM_CATALOG,
+  IDENTITY_PROVIDER_CATALOG,
+  PLAINID_TEAM_CATALOG,
+} from '../../types';
 import { Field, Button, SectionCard, Pill, EmptyState, Modal } from '../ui/Primitives';
 import { AiButton } from '../ui/AiButton';
 import { evaluateSection } from '../../lib/completeness';
@@ -843,10 +848,33 @@ export function FrameworkSection({ poc, set }: SectionProps) {
   const removePersona = (id: string) =>
     set({ personas: poc.personas.filter((p) => p.id !== id) });
 
+  // PlainID team picker state.
+  const [plainidPickerOpen, setPlainidPickerOpen] = useState(false);
+
   const addMember = (org: string) =>
     set({
-      teamMembers: [...poc.teamMembers, { id: uid(), org, name: '', role: '', email: '' }],
+      teamMembers: [
+        ...poc.teamMembers,
+        { id: uid(), org, name: '', role: '', email: '', catalogId: null },
+      ],
     });
+
+  const addMemberFromCatalog = (entry: PlainIdTeamCatalogEntry) => {
+    set({
+      teamMembers: [
+        ...poc.teamMembers,
+        {
+          id: uid(),
+          org: 'PlainID',
+          name: entry.name,
+          role: entry.defaultRole,
+          email: entry.email,
+          catalogId: entry.id,
+        },
+      ],
+    });
+  };
+
   const updateMember = (id: string, patch: Partial<TeamMember>) =>
     set({
       teamMembers: poc.teamMembers.map((m) => (m.id === id ? { ...m, ...patch } : m)),
@@ -913,8 +941,11 @@ export function FrameworkSection({ poc, set }: SectionProps) {
           <Button size="sm" onClick={() => addMember(poc.customerName || 'Customer')}>
             + Customer
           </Button>
-          <Button size="sm" onClick={() => addMember('PlainID')}>
-            + PlainID
+          <Button size="sm" onClick={() => setPlainidPickerOpen(true)}>
+            + PlainID (pick)
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => addMember('PlainID')}>
+            + PlainID custom
           </Button>
         </div>
       </div>
@@ -961,6 +992,58 @@ export function FrameworkSection({ poc, set }: SectionProps) {
           </div>
         ))}
       </div>
+
+      {/* PlainID team picker */}
+      <Modal
+        open={plainidPickerOpen}
+        onClose={() => setPlainidPickerOpen(false)}
+        title="Add a PlainID team member"
+        width={520}
+      >
+        <p className="text-[12.5px] text-[var(--color-text-muted)] mb-3 leading-relaxed">
+          Name, email, and a default role pre-fill from the catalog. Edit the role on the
+          row afterward to reflect responsibility on this specific engagement (e.g.
+          add "— POC Lead" to the title).
+        </p>
+        <div className="space-y-1.5">
+          {PLAINID_TEAM_CATALOG.map((e) => {
+            const alreadyAdded = poc.teamMembers.some((m) => m.catalogId === e.id);
+            return (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => {
+                  addMemberFromCatalog(e);
+                  setPlainidPickerOpen(false);
+                }}
+                disabled={alreadyAdded}
+                className={`w-full text-left p-2.5 rounded-md border transition-colors ${
+                  alreadyAdded
+                    ? 'border-[var(--color-border)] bg-[var(--color-bg)] opacity-50 cursor-not-allowed'
+                    : 'border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-hover)]'
+                }`}
+              >
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[12.5px] font-medium text-[var(--color-text)]">
+                    {e.name}
+                  </span>
+                  <span className="text-[11px] text-[var(--color-text-muted)]">
+                    {e.defaultRole}
+                  </span>
+                  {alreadyAdded && (
+                    <span className="ml-auto text-[10px] mono tracking-wider text-[var(--color-text-dim)]">
+                      ALREADY ADDED
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-[var(--color-text-dim)] mt-0.5">
+                  {e.email}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
     </SectionCard>
   );
 }

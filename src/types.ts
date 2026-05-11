@@ -48,6 +48,12 @@ export interface TeamMember {
   name: string;
   role: string;
   email: string;
+  /**
+   * The PlainID team catalog entry id this row was added from.
+   * `null` for free-text rows (customer-side, or PlainID people not in
+   * the catalog). Renaming after picking doesn't clear this.
+   */
+  catalogId: string | null;
 }
 
 export interface UseCase {
@@ -1044,4 +1050,56 @@ export function findIdentityProviderEntry(
   id: string,
 ): IdentityProviderCatalogEntry | undefined {
   return IDENTITY_PROVIDER_CATALOG.find((e) => e.id === id);
+}
+
+// ============================================================
+// PlainID team catalog — preset entries for the Team Members table
+// in Section 08 (Framework), PlainID side only.
+//
+// Customer-side team members stay free-form (names and roles vary per
+// engagement). PlainID-side picker keeps email/role consistent across
+// POC documents and saves a few seconds per add.
+//
+// Roles here are the team members' typical titles — the SE can edit
+// the role on the row to reflect their specific responsibility on the
+// engagement (e.g., "Solutions Engineer — POC Lead" vs. just
+// "Solutions Engineer").
+// ============================================================
+
+export interface PlainIdTeamCatalogEntry {
+  id: string;
+  name: string;
+  email: string;
+  defaultRole: string;
+}
+
+export const PLAINID_TEAM_CATALOG: PlainIdTeamCatalogEntry[] = [
+  {
+    id: 'ed-mikuszewski',
+    name: 'Ed Mikuszewski',
+    email: 'edward.mikuszewski@plainid.com',
+    defaultRole: 'Solutions Engineer',
+  },
+  {
+    id: 'james-crosby',
+    name: 'James Crosby',
+    email: 'james.crosby@plainid.com',
+    defaultRole: 'Senior Solutions Engineer',
+  },
+  {
+    id: 'zak-taylor',
+    name: 'Zak Taylor',
+    email: 'zak.taylor@plainid.com',
+    defaultRole: 'Solutions Engineer',
+  },
+  {
+    id: 'greg-berg',
+    name: 'Greg Berg',
+    email: 'greg.berg@plainid.com',
+    defaultRole: 'Regional Sales Manager',
+  },
+];
+
+export function findPlainIdTeamEntry(id: string): PlainIdTeamCatalogEntry | undefined {
+  return PLAINID_TEAM_CATALOG.find((e) => e.id === id);
 }
