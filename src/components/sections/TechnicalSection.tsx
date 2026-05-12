@@ -25,6 +25,7 @@ import {
 } from '../../types';
 import { Field, Button, SectionCard, Pill, EmptyState } from '../ui/Primitives';
 import { evaluateSection } from '../../lib/completeness';
+import { summarizeSection } from '../../lib/section-summaries';
 import { emptyTechnicalFoundation } from '../../lib/technical-spec';
 
 const uid = () =>
@@ -35,6 +36,7 @@ const uid = () =>
 interface SectionProps {
   poc: PocDocument;
   set: (patch: Partial<PocDocument>) => void;
+  firstIncompleteId?: string | null;
 }
 
 // ============================================================
@@ -999,11 +1001,24 @@ function UseCaseTechnicalCard({
   const editInUseCases = () => {
     const node = document.getElementById(`uc-${uc.id}`);
     if (!node) return;
-    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    node.classList.add('!border-[var(--color-accent)]', 'bg-[var(--color-pill-accent-bg)]');
-    window.setTimeout(() => {
-      node.classList.remove('!border-[var(--color-accent)]', 'bg-[var(--color-pill-accent-bg)]');
-    }, 1600);
+    // Expand Section 05 if it's currently collapsed — otherwise the
+    // scroll target is inside hidden content.
+    const usecasesSection = document.getElementById('usecases');
+    const headerEl = usecasesSection?.querySelector<HTMLElement>(
+      '[role="button"][aria-expanded]',
+    );
+    if (headerEl?.getAttribute('aria-expanded') === 'false') {
+      headerEl.click();
+    }
+    // Defer the scroll one frame so the just-expanded section has
+    // rendered its children with their final positions.
+    requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      node.classList.add('!border-[var(--color-accent)]', 'bg-[var(--color-pill-accent-bg)]');
+      window.setTimeout(() => {
+        node.classList.remove('!border-[var(--color-accent)]', 'bg-[var(--color-pill-accent-bg)]');
+      }, 1600);
+    });
   };
 
   if (!CATEGORY_HAS_TECH_BLOCK[uc.category]) {
@@ -1103,7 +1118,7 @@ function UseCaseTechnicalCard({
 // ============================================================
 // Top-level Technical Foundation section
 // ============================================================
-export function TechnicalSection({ poc, set }: SectionProps) {
+export function TechnicalSection({ poc, set, firstIncompleteId }: SectionProps) {
   const updateUseCase = (next: UseCase) =>
     set({ useCases: poc.useCases.map((u) => (u.id === next.id ? next : u)) });
 
@@ -1119,6 +1134,8 @@ export function TechnicalSection({ poc, set }: SectionProps) {
       title="Technical Foundation"
       description="Technical deployment details for each use case you defined in Section 05. The title, category, and authorizer come from there — edit those in Section 05; fill in the deployment specifics here."
       status={evaluateSection(poc, 'technical')}
+      summary={summarizeSection(poc, 'technical')}
+      defaultOpen={firstIncompleteId === 'technical'}
     >
       <UniversalFoundationBlock foundation={foundation} onChange={setFoundation} />
 

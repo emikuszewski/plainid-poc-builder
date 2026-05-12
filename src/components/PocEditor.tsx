@@ -209,6 +209,23 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
   // "+ N more" tail of the sidebar blockers preview.
   const [openItemsModalOpen, setOpenItemsModalOpen] = useState(false);
 
+  // ---- First-incomplete section auto-open.
+  // We compute this once when the POC first loads (snapshotting which
+  // section the SE should land on) and don't update it as they edit —
+  // otherwise the section they're filling out would close on them once
+  // its blockers cleared, which is jarring. Captured per-POC: switching
+  // POCs recomputes it for the new one.
+  const [firstIncompleteId, setFirstIncompleteId] = useState<string | null>(null);
+  const pinnedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!poc) return;
+    if (pinnedFor.current === poc.id) return;
+    pinnedFor.current = poc.id ?? null;
+    const sections = evaluateAll(poc);
+    const firstWithIssues = sections.find((s) => s.issues.length > 0);
+    setFirstIncompleteId(firstWithIssues?.id ?? null);
+  }, [poc]);
+
   async function runReview() {
     if (!poc) return;
     setReviewing(true);
@@ -319,7 +336,16 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
                 href={`#${s.id}`}
                 onClick={(e) => {
                   e.preventDefault();
-                  document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth' });
+                  const node = document.getElementById(s.id);
+                  if (!node) return;
+                  // Expand if collapsed, then scroll
+                  const headerEl = node.querySelector<HTMLElement>(
+                    '[role="button"][aria-expanded]',
+                  );
+                  if (headerEl?.getAttribute('aria-expanded') === 'false') {
+                    headerEl.click();
+                  }
+                  node.scrollIntoView({ behavior: 'smooth' });
                 }}
                 className={`flex items-center gap-2.5 px-2 py-1.5 rounded text-[12.5px] transition-colors ${
                   isActive
@@ -438,22 +464,23 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
 
         <div className="max-w-[920px] mx-auto px-6 py-8">
           <fieldset disabled={!isOwner && !isNew} className="space-y-0">
-            <CustomerSection poc={poc} set={patch} />
-            <ContextSection poc={poc} set={patch} />
-            <ObjectivesSection poc={poc} set={patch} />
-            <DiscoverySection poc={poc} set={patch} />
+            <CustomerSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <ContextSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <ObjectivesSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <DiscoverySection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
             <UseCasesSection
               poc={poc}
               set={patch}
+              firstIncompleteId={firstIncompleteId}
               library={library}
               onOpenLibraryPicker={() => setPickerOpen(true)}
             />
-            <TechnicalSection poc={poc} set={patch} />
-            <TimelineSection poc={poc} set={patch} />
-            <FrameworkSection poc={poc} set={patch} />
-            <DependenciesSection poc={poc} set={patch} />
-            <TrackerSection poc={poc} set={patch} />
-            <DocsSection poc={poc} set={patch} />
+            <TechnicalSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <TimelineSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <FrameworkSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <DependenciesSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <TrackerSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <DocsSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
           </fieldset>
         </div>
       </div>
@@ -724,10 +751,22 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
                     type="button"
                     onClick={() => {
                       // Scroll to the section in the editor and briefly flash
-                      // its border so the SE sees where they landed.
+                      // its background so the SE sees where they landed. Also
+                      // expand the section if it's currently collapsed —
+                      // otherwise the scroll target is just the header bar.
                       const node = document.getElementById(s.id);
                       if (!node) return;
                       setOpenItemsModalOpen(false);
+                      // The first child of the SectionCard's <section> is the
+                      // clickable header. Clicking it toggles open state. If
+                      // it's already open, clicking would CLOSE it — so check
+                      // aria-expanded first and only click when closed.
+                      const headerEl = node.querySelector<HTMLElement>(
+                        '[role="button"][aria-expanded]',
+                      );
+                      if (headerEl?.getAttribute('aria-expanded') === 'false') {
+                        headerEl.click();
+                      }
                       node.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       node.classList.add(
                         'bg-[var(--color-pill-accent-bg)]',

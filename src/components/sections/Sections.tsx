@@ -24,6 +24,7 @@ import {
 import { Field, Button, SectionCard, Pill, EmptyState, Modal } from '../ui/Primitives';
 import { AiButton } from '../ui/AiButton';
 import { evaluateSection } from '../../lib/completeness';
+import { summarizeSection } from '../../lib/section-summaries';
 import { emptyTechnicalSpec, reshapeTechnicalSpec } from '../../lib/technical-spec';
 import { generate } from '../../lib/ai';
 import { buildFieldSuggestPrompt, FIELD_PROMPTS } from '../../lib/ai-prompts';
@@ -38,6 +39,12 @@ const uid = () =>
 interface SectionProps {
   poc: PocDocument;
   set: (patch: Partial<PocDocument>) => void;
+  /**
+   * The id of the first section whose required fields aren't all
+   * satisfied. The matching section auto-opens; others start collapsed.
+   * Computed once by PocEditor on mount.
+   */
+  firstIncompleteId?: string | null;
 }
 
 const status = (poc: PocDocument, id: string) => evaluateSection(poc, id);
@@ -113,7 +120,7 @@ function useFocusOnAppend(length: number) {
 // ============================================================
 // 01 — Customer
 // ============================================================
-export function CustomerSection({ poc, set }: SectionProps) {
+export function CustomerSection({ poc, set, firstIncompleteId }: SectionProps) {
   const overviewSuggest = useFieldSuggest('customerOverview', poc, set, poc.id);
   return (
     <SectionCard
@@ -122,6 +129,8 @@ export function CustomerSection({ poc, set }: SectionProps) {
       title="Customer"
       description="The basics. The customer name interpolates into the PlainID Overview prose and several headings."
       status={status(poc, 'customer')}
+      summary={summarizeSection(poc, 'customer')}
+      defaultOpen={firstIncompleteId === 'customer'}
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Field label="Customer name" required>
@@ -195,7 +204,7 @@ export function CustomerSection({ poc, set }: SectionProps) {
 // ============================================================
 // 02 — Compelling Event / Authorization Context
 // ============================================================
-export function ContextSection({ poc, set }: SectionProps) {
+export function ContextSection({ poc, set, firstIncompleteId }: SectionProps) {
   const compellingSuggest = useFieldSuggest('compellingEvent', poc, set, poc.id);
   const authContextSuggest = useFieldSuggest('authorizationContext', poc, set, poc.id);
   return (
@@ -205,6 +214,8 @@ export function ContextSection({ poc, set }: SectionProps) {
       title="Compelling Event"
       description="The why-now. If this section is hand-wavy, the POC isn't qualified. Name the trigger: a go-live, a regulatory deadline, a migration, a security incident, an audit finding."
       status={status(poc, 'context')}
+      summary={summarizeSection(poc, 'context')}
+      defaultOpen={firstIncompleteId === 'context'}
     >
       <Field
         label="Compelling event"
@@ -241,7 +252,7 @@ Provide a unified enforcement layer for the data layer, API gateway, and applica
 // ============================================================
 // 03 — Objectives & Outcomes
 // ============================================================
-export function ObjectivesSection({ poc, set }: SectionProps) {
+export function ObjectivesSection({ poc, set, firstIncompleteId }: SectionProps) {
   const objSuggest = useFieldSuggest('objectives', poc, set, poc.id);
   const validateSuggest = useFieldSuggest('whatToValidate', poc, set, poc.id);
   const deliverSuggest = useFieldSuggest('postPocDeliverables', poc, set, poc.id);
@@ -252,6 +263,8 @@ export function ObjectivesSection({ poc, set }: SectionProps) {
       title="Objectives & Outcomes"
       description="The contract. What does success look like, and what does PlainID owe the customer at the end?"
       status={status(poc, 'objectives')}
+      summary={summarizeSection(poc, 'objectives')}
+      defaultOpen={firstIncompleteId === 'objectives'}
     >
       <Field label="Overall objective" required action={objSuggest.button}>
         <textarea
@@ -295,7 +308,7 @@ Role consolidation mechanics — how legacy roles map into policies`}
 // ============================================================
 // 04 — Discovery Summary
 // ============================================================
-export function DiscoverySection({ poc, set }: SectionProps) {
+export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) {
   const archSuggest = useFieldSuggest('architectureConstraints', poc, set, poc.id);
   const [systemPickerOpen, setSystemPickerOpen] = useState(false);
   const [systemFilter, setSystemFilter] = useState('');
@@ -378,6 +391,8 @@ export function DiscoverySection({ poc, set }: SectionProps) {
       title="Discovery Summary"
       description="What systems are in scope, the customer's identity stack, and any architecture constraints surfaced during discovery."
       status={status(poc, 'discovery')}
+      summary={summarizeSection(poc, 'discovery')}
+      defaultOpen={firstIncompleteId === 'discovery'}
     >
       <div className="mb-4">
         <label className="mb-1.5">Tenant strategy</label>
@@ -764,7 +779,7 @@ Agentic AI use cases — tracked separately`}
 // ============================================================
 // 05 — Timeline
 // ============================================================
-export function TimelineSection({ poc, set }: SectionProps) {
+export function TimelineSection({ poc, set, firstIncompleteId }: SectionProps) {
   const sprintFocusRef = useFocusOnAppend(poc.sprints.length);
   const addSprint = () =>
     set({
@@ -782,6 +797,8 @@ export function TimelineSection({ poc, set }: SectionProps) {
       title="Timeline"
       description="High-level timeline summary plus 2-week sprint structure aligned to use-case clusters."
       status={status(poc, 'timeline')}
+      summary={summarizeSection(poc, 'timeline')}
+      defaultOpen={firstIncompleteId === 'timeline'}
     >
       <Field label="Timeline summary" required>
         <textarea
@@ -839,7 +856,7 @@ export function TimelineSection({ poc, set }: SectionProps) {
 // ============================================================
 // 06 — Framework
 // ============================================================
-export function FrameworkSection({ poc, set }: SectionProps) {
+export function FrameworkSection({ poc, set, firstIncompleteId }: SectionProps) {
   const personaFocusRef = useFocusOnAppend(poc.personas.length);
   const memberFocusRef = useFocusOnAppend(poc.teamMembers.length);
   const addPersona = () =>
@@ -890,6 +907,8 @@ export function FrameworkSection({ poc, set }: SectionProps) {
       title="Framework"
       description="Cadence, personas, and the named humans on both sides of the engagement."
       status={status(poc, 'framework')}
+      summary={summarizeSection(poc, 'framework')}
+      defaultOpen={firstIncompleteId === 'framework'}
     >
       <Field label="Cadence & collaboration model" required>
         <textarea
@@ -1055,6 +1074,7 @@ export function FrameworkSection({ poc, set }: SectionProps) {
 export function UseCasesSection({
   poc,
   set,
+  firstIncompleteId,
   library,
   onOpenLibraryPicker,
 }: SectionProps & {
@@ -1203,6 +1223,8 @@ export function UseCasesSection({
       title="Use Cases"
       description="The meat of the POC. Pick from the library to drop a fully-formed use case in (snapshotted at insertion — library updates won't propagate). Then customize."
       status={status(poc, 'usecases')}
+      summary={summarizeSection(poc, 'usecases')}
+      defaultOpen={firstIncompleteId === 'usecases'}
     >
       <div className="flex items-center justify-end gap-2 mb-3">
         <AiButton
@@ -1454,7 +1476,7 @@ export function UseCasesSection({
   );
 }
 // ============================================================
-export function DependenciesSection({ poc, set }: SectionProps) {
+export function DependenciesSection({ poc, set, firstIncompleteId }: SectionProps) {
   return (
     <SectionCard
       id="dependencies"
@@ -1462,6 +1484,8 @@ export function DependenciesSection({ poc, set }: SectionProps) {
       title="Dependencies & Pre-Requisites"
       description="Who's responsible for what, and what's still open."
       status={status(poc, 'dependencies')}
+      summary={summarizeSection(poc, 'dependencies')}
+      defaultOpen={firstIncompleteId === 'dependencies'}
     >
       <Field label={`${poc.customerName || 'Customer'} responsibilities`} required>
         <textarea
@@ -1498,7 +1522,7 @@ Lead authorizer configuration and integration testing`}
 // ============================================================
 // 09 — Tracker
 // ============================================================
-export function TrackerSection({ poc, set }: SectionProps) {
+export function TrackerSection({ poc, set, firstIncompleteId }: SectionProps) {
   const trackerFocusRef = useFocusOnAppend(poc.tracker.length);
   const addRow = () =>
     set({
@@ -1558,6 +1582,8 @@ export function TrackerSection({ poc, set }: SectionProps) {
       title="POC Tracker"
       description="Phased task list. Pre-populated from the standard PlainID engagement template — edit as needed."
       status={status(poc, 'tracker')}
+      summary={summarizeSection(poc, 'tracker')}
+      defaultOpen={firstIncompleteId === 'tracker'}
     >
       <div className="flex items-center justify-end mb-2 gap-2">
         <Button size="sm" variant="ghost" onClick={() => setPasteOpen(true)}>
@@ -1735,7 +1761,7 @@ export function TrackerSection({ poc, set }: SectionProps) {
 // ============================================================
 // 10 — Reference Documentation
 // ============================================================
-export function DocsSection({ poc, set }: SectionProps) {
+export function DocsSection({ poc, set, firstIncompleteId }: SectionProps) {
   const docFocusRef = useFocusOnAppend(poc.referenceDocs.length);
   const addDoc = () =>
     set({
@@ -1758,6 +1784,8 @@ export function DocsSection({ poc, set }: SectionProps) {
       title="Reference Documentation"
       description="Public PlainID docs to share with the customer. Defaults are seeded — add or remove as needed."
       status={status(poc, 'docs')}
+      summary={summarizeSection(poc, 'docs')}
+      defaultOpen={firstIncompleteId === 'docs'}
     >
       <div className="flex items-center justify-end mb-2">
         <Button size="sm" onClick={addDoc}>

@@ -78,26 +78,64 @@ interface SectionCardProps {
   number?: string;
   description?: string;
   status?: { satisfied: number; required: number };
+  /**
+   * Optional one-line preview rendered in the collapsed header instead
+   * of the description. Helps the SE scan closed accordions.
+   */
+  summary?: string;
+  /**
+   * Controls whether the section starts open. Computed by the parent
+   * editor using the "first incomplete section" rule. Sections render
+   * uncollapsed when this is true; collapsed otherwise. The SE can
+   * always toggle by clicking the header.
+   */
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }
 
-export function SectionCard({ id, title, number, description, status, children }: SectionCardProps) {
+export function SectionCard({
+  id,
+  title,
+  number,
+  description,
+  status,
+  summary,
+  defaultOpen = true,
+  children,
+}: SectionCardProps) {
+  const [open, setOpen] = React.useState(defaultOpen);
   const pct = status && status.required > 0 ? (status.satisfied / status.required) * 100 : 0;
   const complete = status && status.satisfied === status.required && status.required > 0;
   return (
-    <section id={id} className="mb-12 scroll-mt-20">
-      <header className="flex items-baseline gap-3 mb-1 pb-3 border-b border-[var(--color-border)]">
+    <section
+      id={id}
+      className={`mb-3 scroll-mt-20 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-elevated)] overflow-hidden transition-colors ${
+        open ? 'border-[var(--color-border-strong)]' : ''
+      }`}
+    >
+      <header
+        className="flex items-baseline gap-3 px-4 py-3 cursor-pointer select-none hover:bg-[var(--color-bg-hover)] transition-colors"
+        onClick={() => setOpen((v) => !v)}
+        role="button"
+        aria-expanded={open}
+      >
         {number && (
           <span className="mono text-[11px] text-[var(--color-text-dim)] tracking-widest font-medium">
             {number}
           </span>
         )}
-        <h2 className="text-[18px] font-semibold tracking-tight">{title}</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+        {/* Collapsed summary — hidden when section is open so the description shows */}
+        {!open && summary && (
+          <span className="text-[12px] text-[var(--color-text-muted)] truncate min-w-0 flex-1">
+            {summary}
+          </span>
+        )}
         {status && (
           <span
-            className={`mono text-[10px] tracking-widest ml-auto ${
-              complete ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'
-            }`}
+            className={`mono text-[10px] tracking-widest ${open ? 'ml-auto' : ''} ${
+              !open && !summary ? 'ml-auto' : ''
+            } ${complete ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'}`}
           >
             {status.satisfied}/{status.required}
             <span className="ml-2 inline-block w-12 h-[2px] bg-[var(--color-border)] align-middle relative top-[-1px]">
@@ -110,13 +148,25 @@ export function SectionCard({ id, title, number, description, status, children }
             </span>
           </span>
         )}
+        <span
+          className={`text-[var(--color-text-dim)] text-[10px] transition-transform ${
+            open ? 'rotate-90' : ''
+          }`}
+          aria-hidden
+        >
+          ▶
+        </span>
       </header>
-      {description && (
-        <p className="text-[12.5px] text-[var(--color-text-muted)] mb-5 leading-relaxed max-w-3xl">
-          {description}
-        </p>
+      {open && (
+        <div className="px-4 pb-5 pt-1 border-t border-[var(--color-border)]">
+          {description && (
+            <p className="text-[12.5px] text-[var(--color-text-muted)] mb-5 leading-relaxed max-w-3xl mt-3">
+              {description}
+            </p>
+          )}
+          <div>{children}</div>
+        </div>
       )}
-      <div>{children}</div>
     </section>
   );
 }
