@@ -205,6 +205,10 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
   const [review, setReview] = useState<ReviewResult | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
+  // ---- Open Items modal — opened from either the "N OPEN" badge or the
+  // "+ N more" tail of the sidebar blockers preview.
+  const [openItemsModalOpen, setOpenItemsModalOpen] = useState(false);
+
   async function runReview() {
     if (!poc) return;
     setReviewing(true);
@@ -287,12 +291,9 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
   const all = evaluateAll(poc);
   const overall = overallCompleteness(poc);
 
-  // Open-items modal — opened from either the "N OPEN" badge or the
-  // "+ N more" tail of the sidebar blockers preview.
-  const [openItemsModalOpen, setOpenItemsModalOpen] = useState(false);
+  // Derived values for the open-items modal (declared at top with other hooks).
+  // These are recomputed on every render, no hooks involved.
   const openSections = all.filter((s) => s.issues.length > 0);
-  // Map id -> SectionMeta so we can render labels in the modal and find
-  // DOM ids for the scroll-into-view "jump" affordance.
   const sectionMetaById = new Map(SECTIONS.map((s) => [s.id, s]));
 
   const filteredLibrary = library.filter((e) =>
