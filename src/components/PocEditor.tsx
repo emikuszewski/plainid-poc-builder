@@ -485,6 +485,11 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         </div>
       </div>
 
+      {/* Mirror right-rail spacer — same width as the left sidebar. Keeps
+          the centered editor pane visually balanced on wide screens. Hides
+          below the lg breakpoint to match the sidebar's own behavior. */}
+      <div aria-hidden className="hidden lg:block w-[260px] flex-shrink-0" />
+
       {/* Library picker modal — multi-select */}
       <Modal
         open={pickerOpen}
