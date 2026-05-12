@@ -1002,13 +1002,19 @@ function UseCaseTechnicalCard({
     const node = document.getElementById(`uc-${uc.id}`);
     if (!node) return;
     // Expand Section 05 if it's currently collapsed — otherwise the
-    // scroll target is inside hidden content.
+    // scroll target is inside hidden content. Same pattern for the inner
+    // card itself: with card-list collapse, individual UC cards are
+    // collapsed by default; click the card's own header to expand.
     const usecasesSection = document.getElementById('usecases');
-    const headerEl = usecasesSection?.querySelector<HTMLElement>(
+    const sectionHeader = usecasesSection?.querySelector<HTMLElement>(
       '[role="button"][aria-expanded]',
     );
-    if (headerEl?.getAttribute('aria-expanded') === 'false') {
-      headerEl.click();
+    if (sectionHeader?.getAttribute('aria-expanded') === 'false') {
+      sectionHeader.click();
+    }
+    const cardHeader = node.querySelector<HTMLElement>('[role="button"][aria-expanded]');
+    if (cardHeader?.getAttribute('aria-expanded') === 'false') {
+      cardHeader.click();
     }
     // Defer the scroll one frame so the just-expanded section has
     // rendered its children with their final positions.

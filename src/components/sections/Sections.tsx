@@ -21,7 +21,16 @@ import {
   IDENTITY_PROVIDER_CATALOG,
   PLAINID_TEAM_CATALOG,
 } from '../../types';
-import { Field, Button, SectionCard, Pill, EmptyState, Modal } from '../ui/Primitives';
+import {
+  Field,
+  Button,
+  SectionCard,
+  Pill,
+  EmptyState,
+  Modal,
+  CollapsibleCard,
+  useExpandedSet,
+} from '../ui/Primitives';
 import { AiButton } from '../ui/AiButton';
 import { evaluateSection } from '../../lib/completeness';
 import { summarizeSection } from '../../lib/section-summaries';
@@ -315,6 +324,10 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
   const systemFocusRef = useFocusOnAppend(poc.inScopeSystems.length);
   const identityFocusRef = useFocusOnAppend(poc.identitySources.length);
 
+  // Collapsible card state — new rows auto-open, existing rows open on click.
+  const systemsExpanded = useExpandedSet(poc.inScopeSystems.map((s) => s.id));
+  const idpsExpanded = useExpandedSet(poc.identitySources.map((s) => s.id));
+
   // Blank-row fallback for fully custom in-scope systems.
   const addSystem = () =>
     set({
@@ -493,46 +506,79 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
           />
         )}
         <div className="space-y-2">
-          {poc.inScopeSystems.map((s, idx) => (
-            <div
-              key={s.id}
-              className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
-            >
-              <input
-                ref={idx === poc.inScopeSystems.length - 1 ? systemFocusRef : undefined}
-                className="col-span-3"
-                placeholder="System name"
-                value={s.name}
-                onChange={(e) => updateSystem(s.id, { name: e.target.value })}
-              />
-              <input
-                className="col-span-7"
-                placeholder="POC focus"
-                value={s.focus}
-                onChange={(e) => updateSystem(s.id, { focus: e.target.value })}
-              />
-              <select
-                className="col-span-1"
-                value={s.priority}
-                onChange={(e) =>
-                  updateSystem(s.id, { priority: e.target.value as InScopeSystem['priority'] })
+          {poc.inScopeSystems.map((s, idx) => {
+            const isLast = idx === poc.inScopeSystems.length - 1;
+            return (
+              <CollapsibleCard
+                key={s.id}
+                expanded={systemsExpanded.isOpen(s.id)}
+                onToggle={() => systemsExpanded.toggle(s.id)}
+                header={
+                  <>
+                    <span className="text-[13px] truncate">
+                      {s.name || <span className="text-[var(--color-text-dim)]">Untitled system</span>}
+                    </span>
+                    <Pill tone={s.priority === 'P1' ? 'accent' : 'neutral'}>{s.priority}</Pill>
+                    <span className="ml-auto flex-shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeSystem(s.id);
+                        }}
+                        title="Remove"
+                      >
+                        ×
+                      </Button>
+                    </span>
+                  </>
                 }
               >
-                <option value="P1">P1</option>
-                <option value="P2">P2</option>
-                <option value="P3">P3</option>
-              </select>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="col-span-1 justify-center"
-                onClick={() => removeSystem(s.id)}
-                title="Remove"
-              >
-                ×
-              </Button>
-            </div>
-          ))}
+                <div className="grid grid-cols-12 gap-2 mt-2">
+                  <div className="col-span-9">
+                    <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                      Name
+                    </label>
+                    <input
+                      ref={isLast ? systemFocusRef : undefined}
+                      placeholder="System name"
+                      value={s.name}
+                      onChange={(e) => updateSystem(s.id, { name: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                      Priority
+                    </label>
+                    <select
+                      value={s.priority}
+                      onChange={(e) =>
+                        updateSystem(s.id, {
+                          priority: e.target.value as InScopeSystem['priority'],
+                        })
+                      }
+                    >
+                      <option value="P1">P1</option>
+                      <option value="P2">P2</option>
+                      <option value="P3">P3</option>
+                    </select>
+                  </div>
+                  <div className="col-span-12 mt-2">
+                    <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                      POC focus
+                    </label>
+                    <textarea
+                      rows={4}
+                      placeholder="What we're doing with this system in the POC."
+                      value={s.focus}
+                      onChange={(e) => updateSystem(s.id, { focus: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </CollapsibleCard>
+            );
+          })}
         </div>
       </div>
 
@@ -549,40 +595,70 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
           </div>
         </div>
         <div className="space-y-2">
-          {poc.identitySources.map((s, idx) => (
-            <div
-              key={s.id}
-              className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
-            >
-              <input
-                ref={idx === poc.identitySources.length - 1 ? identityFocusRef : undefined}
-                className="col-span-3"
-                placeholder="Name (e.g. Ping Identity)"
-                value={s.name}
-                onChange={(e) => updateIdentity(s.id, { name: e.target.value })}
-              />
-              <input
-                className="col-span-3"
-                placeholder="Type (e.g. Primary IdP)"
-                value={s.type}
-                onChange={(e) => updateIdentity(s.id, { type: e.target.value })}
-              />
-              <input
-                className="col-span-5"
-                placeholder="Notes"
-                value={s.notes}
-                onChange={(e) => updateIdentity(s.id, { notes: e.target.value })}
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                className="col-span-1 justify-center"
-                onClick={() => removeIdentity(s.id)}
+          {poc.identitySources.map((s, idx) => {
+            const isLast = idx === poc.identitySources.length - 1;
+            return (
+              <CollapsibleCard
+                key={s.id}
+                expanded={idpsExpanded.isOpen(s.id)}
+                onToggle={() => idpsExpanded.toggle(s.id)}
+                header={
+                  <>
+                    <span className="text-[13px] truncate">
+                      {s.name || <span className="text-[var(--color-text-dim)]">Unnamed</span>}
+                    </span>
+                    {s.type && <Pill>{s.type}</Pill>}
+                    <span className="ml-auto flex-shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeIdentity(s.id);
+                        }}
+                      >
+                        ×
+                      </Button>
+                    </span>
+                  </>
+                }
               >
-                ×
-              </Button>
-            </div>
-          ))}
+                <div className="grid grid-cols-12 gap-2 mt-2">
+                  <div className="col-span-6">
+                    <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                      Name
+                    </label>
+                    <input
+                      ref={isLast ? identityFocusRef : undefined}
+                      placeholder="e.g. Ping Identity"
+                      value={s.name}
+                      onChange={(e) => updateIdentity(s.id, { name: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-span-6">
+                    <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                      Type
+                    </label>
+                    <input
+                      placeholder="e.g. Primary IdP"
+                      value={s.type}
+                      onChange={(e) => updateIdentity(s.id, { type: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-span-12 mt-2">
+                    <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                      Notes
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={s.notes}
+                      onChange={(e) => updateIdentity(s.id, { notes: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </CollapsibleCard>
+            );
+          })}
         </div>
       </div>
 
@@ -859,6 +935,10 @@ export function TimelineSection({ poc, set, firstIncompleteId }: SectionProps) {
 export function FrameworkSection({ poc, set, firstIncompleteId }: SectionProps) {
   const personaFocusRef = useFocusOnAppend(poc.personas.length);
   const memberFocusRef = useFocusOnAppend(poc.teamMembers.length);
+
+  // Collapsible card state.
+  const personasExpanded = useExpandedSet(poc.personas.map((p) => p.id));
+  const membersExpanded = useExpandedSet(poc.teamMembers.map((m) => m.id));
   const addPersona = () =>
     set({ personas: [...poc.personas, { id: uid(), name: '', description: '' }] });
   const updatePersona = (id: string, patch: Partial<Persona>) =>
@@ -925,34 +1005,64 @@ export function FrameworkSection({ poc, set, firstIncompleteId }: SectionProps) 
         </Button>
       </div>
       <div className="space-y-2 mb-6">
-        {poc.personas.map((p, idx) => (
-          <div
-            key={p.id}
-            className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
-          >
-            <input
-              ref={idx === poc.personas.length - 1 ? personaFocusRef : undefined}
-              className="col-span-3"
-              placeholder="Name"
-              value={p.name}
-              onChange={(e) => updatePersona(p.id, { name: e.target.value })}
-            />
-            <input
-              className="col-span-8"
-              placeholder="Description"
-              value={p.description}
-              onChange={(e) => updatePersona(p.id, { description: e.target.value })}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="col-span-1 justify-center"
-              onClick={() => removePersona(p.id)}
+        {poc.personas.map((p, idx) => {
+          const isLast = idx === poc.personas.length - 1;
+          return (
+            <CollapsibleCard
+              key={p.id}
+              expanded={personasExpanded.isOpen(p.id)}
+              onToggle={() => personasExpanded.toggle(p.id)}
+              header={
+                <>
+                  <span className="text-[13px] truncate">
+                    {p.name || <span className="text-[var(--color-text-dim)]">Unnamed persona</span>}
+                  </span>
+                  {p.description && (
+                    <span className="text-[11.5px] text-[var(--color-text-muted)] truncate">
+                      — {p.description}
+                    </span>
+                  )}
+                  <span className="ml-auto flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePersona(p.id);
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </span>
+                </>
+              }
             >
-              ×
-            </Button>
-          </div>
-        ))}
+              <div className="grid grid-cols-12 gap-2 mt-2">
+                <div className="col-span-4">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    Name
+                  </label>
+                  <input
+                    ref={isLast ? personaFocusRef : undefined}
+                    placeholder="e.g. Data Domain Owner"
+                    value={p.name}
+                    onChange={(e) => updatePersona(p.id, { name: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-8">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    Description
+                  </label>
+                  <input
+                    placeholder="Brief description of the role"
+                    value={p.description}
+                    onChange={(e) => updatePersona(p.id, { description: e.target.value })}
+                  />
+                </div>
+              </div>
+            </CollapsibleCard>
+          );
+        })}
       </div>
 
       <div className="flex items-center justify-between mb-2">
@@ -970,47 +1080,86 @@ export function FrameworkSection({ poc, set, firstIncompleteId }: SectionProps) 
         </div>
       </div>
       <div className="space-y-2">
-        {poc.teamMembers.map((m, idx) => (
-          <div
-            key={m.id}
-            className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
-          >
-            <input
-              className="col-span-2"
-              placeholder="Org"
-              value={m.org}
-              onChange={(e) => updateMember(m.id, { org: e.target.value })}
-            />
-            <input
-              ref={idx === poc.teamMembers.length - 1 ? memberFocusRef : undefined}
-              className="col-span-3"
-              placeholder="Name"
-              value={m.name}
-              onChange={(e) => updateMember(m.id, { name: e.target.value })}
-            />
-            <input
-              className="col-span-3"
-              placeholder="Role"
-              value={m.role}
-              onChange={(e) => updateMember(m.id, { role: e.target.value })}
-            />
-            <input
-              className="col-span-3"
-              placeholder="Email"
-              type="email"
-              value={m.email}
-              onChange={(e) => updateMember(m.id, { email: e.target.value })}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="col-span-1 justify-center"
-              onClick={() => removeMember(m.id)}
+        {poc.teamMembers.map((m, idx) => {
+          const isLast = idx === poc.teamMembers.length - 1;
+          return (
+            <CollapsibleCard
+              key={m.id}
+              expanded={membersExpanded.isOpen(m.id)}
+              onToggle={() => membersExpanded.toggle(m.id)}
+              header={
+                <>
+                  {m.org && <Pill tone={m.org === 'PlainID' ? 'accent' : 'neutral'}>{m.org}</Pill>}
+                  <span className="text-[13px] truncate">
+                    {m.name || <span className="text-[var(--color-text-dim)]">Unnamed</span>}
+                  </span>
+                  {m.role && (
+                    <span className="text-[11.5px] text-[var(--color-text-muted)] truncate">
+                      — {m.role}
+                    </span>
+                  )}
+                  <span className="ml-auto flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeMember(m.id);
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </span>
+                </>
+              }
             >
-              ×
-            </Button>
-          </div>
-        ))}
+              <div className="grid grid-cols-12 gap-2 mt-2">
+                <div className="col-span-3">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    Org
+                  </label>
+                  <input
+                    placeholder="Org"
+                    value={m.org}
+                    onChange={(e) => updateMember(m.id, { org: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-4">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    Name
+                  </label>
+                  <input
+                    ref={isLast ? memberFocusRef : undefined}
+                    placeholder="Full name"
+                    value={m.name}
+                    onChange={(e) => updateMember(m.id, { name: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-5">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    Role
+                  </label>
+                  <input
+                    placeholder="Role"
+                    value={m.role}
+                    onChange={(e) => updateMember(m.id, { role: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-12 mt-2">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="name@example.com"
+                    value={m.email}
+                    onChange={(e) => updateMember(m.id, { email: e.target.value })}
+                  />
+                </div>
+              </div>
+            </CollapsibleCard>
+          );
+        })}
       </div>
 
       {/* PlainID team picker */}
@@ -1082,6 +1231,7 @@ export function UseCasesSection({
   onOpenLibraryPicker: () => void;
 }) {
   const useCaseFocusRef = useFocusOnAppend(poc.useCases.length);
+  const useCasesExpanded = useExpandedSet(poc.useCases.map((u) => u.id));
   const addBlank = () =>
     set({
       useCases: [
@@ -1254,76 +1404,122 @@ export function UseCasesSection({
       )}
 
       <div className="space-y-3">
-        {poc.useCases.map((u, i) => (
-          <div
-            key={u.id}
-            id={`uc-${u.id}`}
-            className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-300"
-          >
-            <header className="flex items-center gap-2 mb-3">
-              <Pill tone={u.libraryId ? 'accent' : 'neutral'}>
-                {u.libraryId ? 'FROM LIBRARY' : 'CUSTOM'}
-              </Pill>
-              <Pill>{u.category.toUpperCase()}</Pill>
-              <div className="ml-auto flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => move(u.id, -1)} title="Move up">
-                  ↑
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => move(u.id, 1)} title="Move down">
-                  ↓
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => remove(u.id)} title="Remove">
-                  ×
-                </Button>
-              </div>
-            </header>
-            <Field label="Title" required>
-              <input
-                ref={i === poc.useCases.length - 1 ? useCaseFocusRef : undefined}
-                value={u.title}
-                onChange={(e) => update(u.id, { title: e.target.value })}
-              />
-            </Field>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Category">
-                <select
-                  value={u.category}
-                  onChange={(e) =>
-                    update(u.id, { category: e.target.value as UseCase['category'] })
-                  }
-                >
-                  <option value="Data">Data</option>
-                  <option value="API Gateway">API Gateway</option>
-                  <option value="AI Authorization">AI Authorization</option>
-                  <option value="Identity">Identity</option>
-                  <option value="Compliance">Compliance</option>
-                  <option value="Application">Application</option>
-                  <option value="Other">Other</option>
-                </select>
-              </Field>
-              <Field label="Persona">
-                <input
-                  value={u.persona}
-                  onChange={(e) => update(u.id, { persona: e.target.value })}
-                />
-              </Field>
+        {poc.useCases.map((u, i) => {
+          const isLast = i === poc.useCases.length - 1;
+          return (
+            <div
+              key={u.id}
+              id={`uc-${u.id}`}
+              className="transition-colors duration-300 rounded-md"
+            >
+              <CollapsibleCard
+                expanded={useCasesExpanded.isOpen(u.id)}
+                onToggle={() => useCasesExpanded.toggle(u.id)}
+                header={
+                  <>
+                    <Pill tone={u.libraryId ? 'accent' : 'neutral'}>
+                      {u.libraryId ? 'LIBRARY' : 'CUSTOM'}
+                    </Pill>
+                    <Pill>{u.category.toUpperCase()}</Pill>
+                    <span className="text-[13px] truncate flex-1">
+                      {u.title || (
+                        <span className="text-[var(--color-text-dim)]">Untitled use case</span>
+                      )}
+                    </span>
+                    {u.persona && (
+                      <span className="text-[11px] text-[var(--color-text-muted)] truncate hidden md:inline">
+                        {u.persona}
+                      </span>
+                    )}
+                    <span className="ml-auto flex items-center gap-1 flex-shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          move(u.id, -1);
+                        }}
+                        title="Move up"
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          move(u.id, 1);
+                        }}
+                        title="Move down"
+                      >
+                        ↓
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          remove(u.id);
+                        }}
+                        title="Remove"
+                      >
+                        ×
+                      </Button>
+                    </span>
+                  </>
+                }
+              >
+                <div className="mt-2">
+                  <Field label="Title" required>
+                    <input
+                      ref={isLast ? useCaseFocusRef : undefined}
+                      value={u.title}
+                      onChange={(e) => update(u.id, { title: e.target.value })}
+                    />
+                  </Field>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Category">
+                      <select
+                        value={u.category}
+                        onChange={(e) =>
+                          update(u.id, { category: e.target.value as UseCase['category'] })
+                        }
+                      >
+                        <option value="Data">Data</option>
+                        <option value="API Gateway">API Gateway</option>
+                        <option value="AI Authorization">AI Authorization</option>
+                        <option value="Identity">Identity</option>
+                        <option value="Compliance">Compliance</option>
+                        <option value="Application">Application</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </Field>
+                    <Field label="Persona">
+                      <input
+                        value={u.persona}
+                        onChange={(e) => update(u.id, { persona: e.target.value })}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Objectives" hint="One bullet per line." required>
+                    <textarea
+                      rows={4}
+                      value={u.objectives}
+                      onChange={(e) => update(u.id, { objectives: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Success criteria" hint="One bullet per line." required>
+                    <textarea
+                      rows={4}
+                      value={u.successCriteria}
+                      onChange={(e) => update(u.id, { successCriteria: e.target.value })}
+                    />
+                  </Field>
+                </div>
+              </CollapsibleCard>
             </div>
-            <Field label="Objectives" hint="One bullet per line." required>
-              <textarea
-                rows={4}
-                value={u.objectives}
-                onChange={(e) => update(u.id, { objectives: e.target.value })}
-              />
-            </Field>
-            <Field label="Success criteria" hint="One bullet per line." required>
-              <textarea
-                rows={4}
-                value={u.successCriteria}
-                onChange={(e) => update(u.id, { successCriteria: e.target.value })}
-              />
-            </Field>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* AI: Generate use cases modal */}
@@ -1763,6 +1959,7 @@ export function TrackerSection({ poc, set, firstIncompleteId }: SectionProps) {
 // ============================================================
 export function DocsSection({ poc, set, firstIncompleteId }: SectionProps) {
   const docFocusRef = useFocusOnAppend(poc.referenceDocs.length);
+  const docsExpanded = useExpandedSet(poc.referenceDocs.map((d) => d.id));
   const addDoc = () =>
     set({
       referenceDocs: [
@@ -1793,41 +1990,75 @@ export function DocsSection({ poc, set, firstIncompleteId }: SectionProps) {
         </Button>
       </div>
       <div className="space-y-2">
-        {poc.referenceDocs.map((d, idx) => (
-          <div
-            key={d.id}
-            className="grid grid-cols-12 gap-2 items-start bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md p-2"
-          >
-            <input
-              ref={idx === poc.referenceDocs.length - 1 ? docFocusRef : undefined}
-              className="col-span-4"
-              placeholder="Title"
-              value={d.title}
-              onChange={(e) => update(d.id, { title: e.target.value })}
-            />
-            <input
-              className="col-span-3"
-              placeholder="URL"
-              type="url"
-              value={d.url}
-              onChange={(e) => update(d.id, { url: e.target.value })}
-            />
-            <input
-              className="col-span-4"
-              placeholder="Description"
-              value={d.description}
-              onChange={(e) => update(d.id, { description: e.target.value })}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="col-span-1 justify-center"
-              onClick={() => remove(d.id)}
+        {poc.referenceDocs.map((d, idx) => {
+          const isLast = idx === poc.referenceDocs.length - 1;
+          return (
+            <CollapsibleCard
+              key={d.id}
+              expanded={docsExpanded.isOpen(d.id)}
+              onToggle={() => docsExpanded.toggle(d.id)}
+              header={
+                <>
+                  <span className="text-[13px] truncate">
+                    {d.title || <span className="text-[var(--color-text-dim)]">Untitled doc</span>}
+                  </span>
+                  {d.url && (
+                    <span className="text-[11px] text-[var(--color-text-muted)] truncate hidden md:inline">
+                      {d.url}
+                    </span>
+                  )}
+                  <span className="ml-auto flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        remove(d.id);
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </span>
+                </>
+              }
             >
-              ×
-            </Button>
-          </div>
-        ))}
+              <div className="grid grid-cols-12 gap-2 mt-2">
+                <div className="col-span-12">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    Title
+                  </label>
+                  <input
+                    ref={isLast ? docFocusRef : undefined}
+                    placeholder="Title"
+                    value={d.title}
+                    onChange={(e) => update(d.id, { title: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-12 mt-2">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://docs.plainid.com/..."
+                    value={d.url}
+                    onChange={(e) => update(d.id, { url: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-12 mt-2">
+                  <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+                    Description
+                  </label>
+                  <input
+                    placeholder="Short description"
+                    value={d.description}
+                    onChange={(e) => update(d.id, { description: e.target.value })}
+                  />
+                </div>
+              </div>
+            </CollapsibleCard>
+          );
+        })}
       </div>
     </SectionCard>
   );

@@ -263,3 +263,114 @@ export function EmptyState({
     </div>
   );
 }
+
+// ============================================================
+// Collapsible card row
+//
+// One-line summary header that toggles to show fields below. Used for
+// list items inside sections (use cases, in-scope systems, identity
+// providers, team members, personas, reference docs). Replaces the
+// always-expanded card-per-item rendering — same data, much less
+// scrolling.
+//
+// `useExpandedSet` companion hook below manages which rows are open.
+// ============================================================
+
+export function CollapsibleCard({
+  expanded,
+  onToggle,
+  header,
+  children,
+  className = '',
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  /** One-line header — usually a flex row with summary + actions on right */
+  header: React.ReactNode;
+  /** Fields shown when expanded */
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`border border-[var(--color-border)] rounded-md bg-[var(--color-bg-elevated)] overflow-hidden transition-colors ${
+        expanded ? 'border-[var(--color-border-strong)]' : ''
+      } ${className}`}
+    >
+      <div
+        className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[var(--color-bg-hover)] transition-colors"
+        onClick={onToggle}
+        role="button"
+        aria-expanded={expanded}
+      >
+        <span
+          className={`text-[var(--color-text-dim)] text-[9px] transition-transform flex-shrink-0 ${
+            expanded ? 'rotate-90' : ''
+          }`}
+          aria-hidden
+        >
+          ▶
+        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-2">{header}</div>
+      </div>
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 border-t border-[var(--color-border)]">{children}</div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Manages which items in a list are currently expanded. New items added
+ * after first render are automatically opened so the SE can immediately
+ * fill them in (pairs with the existing useFocusOnAppend behavior).
+ *
+ * Usage:
+ *   const expanded = useExpandedSet(items.map(i => i.id));
+ *   ...
+ *   <CollapsibleCard
+ *     expanded={expanded.isOpen(item.id)}
+ *     onToggle={() => expanded.toggle(item.id)}
+ *     ...
+ *   />
+ */
+export function useExpandedSet(currentIds: string[]) {
+  const [openSet, setOpenSet] = React.useState<Set<string>>(new Set());
+  const seenIds = React.useRef<Set<string>>(new Set(currentIds));
+
+  // When the id list grows, mark the new ids as open. We compare against
+  // a ref so we only open ids on the render where they first appeared,
+  // not every render.
+  React.useEffect(() => {
+    const previouslySeen = seenIds.current;
+    const newlyAdded: string[] = [];
+    for (const id of currentIds) {
+      if (!previouslySeen.has(id)) newlyAdded.push(id);
+    }
+    if (newlyAdded.length > 0) {
+      setOpenSet((prev) => {
+        const next = new Set(prev);
+        for (const id of newlyAdded) next.add(id);
+        return next;
+      });
+    }
+    seenIds.current = new Set(currentIds);
+  }, [currentIds.join(',')]); // intentional: join to detect any change
+
+  return {
+    isOpen: (id: string) => openSet.has(id),
+    toggle: (id: string) =>
+      setOpenSet((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+    open: (id: string) =>
+      setOpenSet((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      }),
+  };
+}
