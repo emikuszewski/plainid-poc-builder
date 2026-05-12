@@ -220,6 +220,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         prompt: built.prompt,
         system: built.system,
         maxTokens: built.maxTokens,
+        modelId: built.modelId,
         feature: 'review-poc',
         pocId: poc.id,
       });

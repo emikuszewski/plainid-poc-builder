@@ -12,10 +12,15 @@ const backend = defineBackend({
 
 /**
  * Grant the ai-generate Lambda permission to invoke Bedrock for the
- * Claude Sonnet 4.6 inference profile (with 4.5 fallback).
+ * inference profiles this app uses:
  *
- * Sonnet 4.6's naming convention changed — date and version suffix dropped
- * (`anthropic.claude-sonnet-4-6` instead of `...4-5-20250929-v1:0`).
+ *   - Sonnet 4.6   — default model for Field Suggest, Generate Use Cases,
+ *                    and the legacy single-model path.
+ *   - Haiku 4.5    — used by Review POC. Haiku's faster generation keeps
+ *                    the full round-trip under AppSync's 30s synchronous
+ *                    resolver timeout, where Sonnet was occasionally
+ *                    timing out.
+ *   - Sonnet 4.5   — kept as fallback during transition.
  *
  * The `us.` prefix is a cross-region inference profile that may route to
  * any "us." region with capacity. The IAM grant covers:
@@ -35,6 +40,14 @@ backend.aiGenerate.resources.lambda.addToRolePolicy(
       'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6',
       'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6',
       'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6',
+      // Haiku 4.5 — inference profile in every source region
+      'arn:aws:bedrock:us-east-1:*:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0',
+      'arn:aws:bedrock:us-east-2:*:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0',
+      'arn:aws:bedrock:us-west-2:*:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0',
+      // Haiku 4.5 — foundation model in every routable region
+      'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
+      'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
+      'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
       // Sonnet 4.5 — kept as fallback during transition
       'arn:aws:bedrock:us-east-1:*:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0',
       'arn:aws:bedrock:us-east-2:*:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0',

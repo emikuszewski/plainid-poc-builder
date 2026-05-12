@@ -131,6 +131,12 @@ const schema = a
         prompt: a.string().required(),
         system: a.string(),
         maxTokens: a.integer(),
+        // Optional override of the Bedrock inference profile to invoke.
+        // Defaults to BEDROCK_MODEL_ID env var (Sonnet 4.6) in the Lambda.
+        // Allows per-feature model routing — e.g. Haiku 4.5 for Review POC
+        // to fit under AppSync's 30s synchronous timeout while keeping
+        // Sonnet for higher-quality features.
+        modelId: a.string(),
       })
       .returns(a.ref('AiGenerateResult'))
       .authorization((allow) => [allow.authenticated()])

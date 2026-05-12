@@ -127,7 +127,7 @@ export function buildFieldSuggestPrompt(
   fieldKey: string,
   poc: PocDocument,
   currentValue: string,
-): { system: string; prompt: string; maxTokens: number } | null {
+): { system: string; prompt: string; maxTokens: number; modelId?: string } | null {
   const p = FIELD_PROMPTS[fieldKey];
   if (!p) return null;
   const ctx = gatherFieldContext(poc);
@@ -155,7 +155,7 @@ Return ONLY the field text — no preamble, no "Here is...", no Markdown. The ou
 export function buildGenerateUseCasesPrompt(
   poc: PocDocument,
   count = 3,
-): { system: string; prompt: string; maxTokens: number } {
+): { system: string; prompt: string; maxTokens: number; modelId?: string } {
   const ctx = gatherFieldContext(poc);
   const existingTitles = poc.useCases.map((u) => u.title).filter(Boolean);
 
@@ -232,6 +232,7 @@ export function buildReviewPocPrompt(poc: PocDocument): {
   system: string;
   prompt: string;
   maxTokens: number;
+  modelId: string;
 } {
   const useCaseSummaries = poc.useCases.map(summarizeUseCase).join('\n');
   const tf = poc.technicalFoundation;
@@ -306,14 +307,18 @@ Return STRICT JSON in this shape, no preamble, no Markdown fences:
 
 Order issues by severity (critical first). Aim for 4–10 issues total — not a checklist, only real problems. If something is genuinely good, mention it under strengths.`;
 
-  // 2000 token cap on the review output. Rationale: the prompt asks for
-  // a 1-2 sentence summary, 4-10 issues at ~50-100 words each, and 2-4 brief
-  // strengths. Realistic output is ~1500 tokens; 2000 gives ~33% headroom.
-  // Hard ceiling chosen to keep total round-trip under AppSync's 30s
-  // synchronous-resolver timeout (Sonnet generates ~65 tok/s, so 2000 tok ≈
-  // 30s generation; combined with ~2s overhead and ~2s prefill, full call
-  // lands around ~25-28s for typical reviews).
-  return { system: SE_SYSTEM, prompt, maxTokens: 2000 };
+  // Review uses Claude Haiku 4.5 instead of Sonnet to fit comfortably
+  // under AppSync's 30s synchronous-resolver timeout. Haiku generates
+  // ~3-5x faster than Sonnet on this workload; a typical review now
+  // returns in 5-8s instead of 22-28s. The structured nature of the
+  // review (find specific failure modes, return JSON) is well-suited
+  // to Haiku — it loses some nuance vs Sonnet but reliably returns.
+  return {
+    system: SE_SYSTEM,
+    prompt,
+    maxTokens: 2000,
+    modelId: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+  };
 }
 
 export interface ReviewIssue {

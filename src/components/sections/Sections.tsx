@@ -63,6 +63,7 @@ function useFieldSuggest(
         prompt: built.prompt,
         system: built.system,
         maxTokens: built.maxTokens,
+        modelId: built.modelId,
         feature: 'field-suggest',
         pocId,
       });
@@ -1137,6 +1138,7 @@ export function UseCasesSection({
         prompt: built.prompt,
         system: built.system,
         maxTokens: built.maxTokens,
+        modelId: built.modelId,
         feature: 'generate-use-cases',
         pocId: poc.id,
       });

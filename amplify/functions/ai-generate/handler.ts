@@ -11,8 +11,17 @@ import type { Schema } from '../../data/resource';
  */
 
 const REGION = process.env.BEDROCK_REGION ?? 'us-east-1';
-const MODEL_ID =
+const DEFAULT_MODEL_ID =
   process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-sonnet-4-6';
+
+// Allowed inference-profile IDs the client can request. Anything outside
+// this allowlist falls back to DEFAULT_MODEL_ID. Keeping an allowlist makes
+// the per-call model parameter safe (clients can't sneak in arbitrary
+// model IDs to inflate cost or hit unauthorized inference profiles).
+const ALLOWED_MODEL_IDS = new Set<string>([
+  'us.anthropic.claude-sonnet-4-6',
+  'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+]);
 
 // Cap output size as a safety belt — caller can request less but never more.
 const HARD_MAX_TOKENS = 4096;
@@ -30,6 +39,15 @@ export const handler: Schema['aiGenerate']['functionHandler'] = async (event) =>
     HARD_MAX_TOKENS,
   );
 
+  // Pick the model — caller can request a specific allowed inference
+  // profile (e.g. Haiku for Review). Anything not on the allowlist falls
+  // back to the configured default.
+  const requestedModel = (args.modelId ?? '').toString().trim();
+  const modelId =
+    requestedModel && ALLOWED_MODEL_IDS.has(requestedModel)
+      ? requestedModel
+      : DEFAULT_MODEL_ID;
+
   if (!prompt.trim()) {
     throw new Error('prompt is required');
   }
@@ -42,7 +60,7 @@ export const handler: Schema['aiGenerate']['functionHandler'] = async (event) =>
   };
 
   const command = new InvokeModelCommand({
-    modelId: MODEL_ID,
+    modelId,
     contentType: 'application/json',
     accept: 'application/json',
     body: JSON.stringify(body),

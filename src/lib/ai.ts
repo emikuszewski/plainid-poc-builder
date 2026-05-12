@@ -21,6 +21,12 @@ export interface AiGenerateOptions {
   maxTokens?: number;
   feature: AiFeature;
   pocId?: string; // for log linkage
+  /**
+   * Optional Bedrock inference profile to invoke for this call. Leave
+   * undefined to use the Lambda's configured default (Sonnet 4.6).
+   * Must be on the Lambda's allowlist or it falls back to default.
+   */
+  modelId?: string;
 }
 
 export interface AiGenerateResult {
@@ -57,6 +63,7 @@ export async function generate(opts: AiGenerateOptions): Promise<AiGenerateResul
       prompt: opts.prompt,
       system: opts.system,
       maxTokens: opts.maxTokens ?? 1500,
+      modelId: opts.modelId,
     });
 
     if (response.errors?.length) {
