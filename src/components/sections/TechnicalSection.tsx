@@ -985,13 +985,11 @@ function ComplianceBlock({
 // ============================================================
 function UseCaseTechnicalCard({
   uc,
-  index,
   allUseCases,
   inScopeAuthorizerIds,
   onUseCaseChange,
 }: {
   uc: UseCase;
-  index: number;
   allUseCases: UseCase[];
   inScopeAuthorizerIds: string[];
   onUseCaseChange: (next: UseCase) => void;
@@ -1012,9 +1010,6 @@ function UseCaseTechnicalCard({
     return (
       <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 mb-3">
         <div className="flex items-center gap-2 mb-1">
-          <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
-            UC {index + 1}
-          </span>
           <span className="text-[13px] font-medium">{uc.title || '(untitled)'}</span>
           <Pill>{uc.category.toUpperCase()}</Pill>
           <button
@@ -1042,9 +1037,6 @@ function UseCaseTechnicalCard({
   return (
     <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg p-4 mb-4">
       <header className="flex items-center gap-2 mb-4 pb-3 border-b border-[var(--color-border)]">
-        <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
-          UC {index + 1}
-        </span>
         <span className="text-[14px] font-semibold">{uc.title || '(untitled)'}</span>
         <Pill tone="accent">{uc.category.toUpperCase()}</Pill>
         <button
@@ -1142,11 +1134,10 @@ export function TechnicalSection({ poc, set }: SectionProps) {
           description="All use cases are 'Other'. Reclassify to add technical specs."
         />
       )}
-      {poc.useCases.map((uc, i) => (
+      {poc.useCases.map((uc) => (
         <UseCaseTechnicalCard
           key={uc.id}
           uc={uc}
-          index={i}
           allUseCases={poc.useCases}
           inScopeAuthorizerIds={poc.inScopeSystems
             .map((s) => s.authorizerId)
