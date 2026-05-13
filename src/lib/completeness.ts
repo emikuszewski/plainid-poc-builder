@@ -1,5 +1,5 @@
 import type { PocDocument, UnknownableField, UseCase } from '../types';
-import { CATEGORY_HAS_TECH_BLOCK, DOWNSTREAM_AUTHORIZER_CATEGORIES } from '../types';
+import { CATEGORY_HAS_TECH_BLOCK, DOWNSTREAM_AUTHORIZER_CATEGORIES, SECTIONS } from '../types';
 
 export interface SectionStatus {
   id: string;
@@ -211,19 +211,10 @@ function evaluateTechnicalForUseCase(
 }
 
 export function evaluateAll(poc: PocDocument): SectionStatus[] {
-  return [
-    'customer',
-    'context',
-    'objectives',
-    'discovery',
-    'usecases',
-    'technical',
-    'timeline',
-    'framework',
-    'dependencies',
-    'tracker',
-    'docs',
-  ].map((id) => evaluateSection(poc, id));
+  // Iterate the SECTIONS array directly so this function stays in sync
+  // whenever sections are added or reordered. Previously this used a
+  // hardcoded list that drifted out of step when Team was introduced.
+  return SECTIONS.map((s) => evaluateSection(poc, s.id));
 }
 
 export function overallCompleteness(poc: PocDocument): {

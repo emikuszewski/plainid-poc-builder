@@ -496,7 +496,16 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         </div>
         <nav className="space-y-0.5">
           {SECTIONS.map((s) => {
-            const stat = all.find((a) => a.id === s.id)!;
+            // Defensive: fall back to an empty status if a section's
+            // completeness isn't computed (e.g. SECTIONS contains a new
+            // section that hasn't been wired into evaluateSection yet).
+            // Previously a missing entry crashed the sidebar.
+            const stat = all.find((a) => a.id === s.id) ?? {
+              id: s.id,
+              satisfied: 0,
+              required: 0,
+              issues: [],
+            };
             const complete = stat.required > 0 && stat.satisfied === stat.required;
             const isActive = activeSection === s.id;
             return (
