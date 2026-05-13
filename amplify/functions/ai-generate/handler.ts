@@ -193,8 +193,12 @@ export const handler = async (event: any): Promise<any> => {
     return { ok: true };
   }
 
-  // AppSync custom-mutation envelope — dispatch by field name.
-  const fieldName = event?.info?.fieldName ?? '';
+  // AppSync custom-mutation envelope. We dispatch by *argument shape*
+  // rather than by event.info.fieldName because Amplify Gen 2's data
+  // wiring doesn't reliably populate fieldName in the event envelope.
+  // The two mutations are distinguishable by their arguments:
+  //   - startAiJob has `feature` + `pocId` (both required in schema)
+  //   - aiGenerate does not have `feature` or `pocId`
   const args = event?.arguments ?? {};
   const identity = event?.identity ?? {};
   const ownerEmail =
@@ -202,15 +206,13 @@ export const handler = async (event: any): Promise<any> => {
     (identity?.username as string) ||
     'unknown';
 
-  if (fieldName === 'aiGenerate') {
-    return handleSyncGenerate(args);
-  }
+  const hasJobShape = !!args.feature && !!args.pocId;
 
-  if (fieldName === 'startAiJob') {
+  if (hasJobShape) {
     return handleStartAiJob(args, ownerEmail);
   }
 
-  throw new Error(`Unrecognized invocation: fieldName=${fieldName}`);
+  return handleSyncGenerate(args);
 };
 
 // ============================================================
