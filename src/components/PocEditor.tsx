@@ -389,12 +389,34 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
     }
   }
 
+  /**
+   * Toolbar Review-button click handler. Behavior depends on current state:
+   *
+   *   - Idle (no job ever run)        → kick a new job, do NOT open modal.
+   *                                     User sees the button flip to a
+   *                                     spinner; they go back to editing.
+   *   - Pending (job in flight)       → no-op. User already knows it's
+   *                                     running because the icon is spinning.
+   *   - Complete (✓)                  → open modal, show cached result.
+   *   - Error (!)                     → open modal, show error + Re-run.
+   *
+   * The modal does not auto-open on a fresh run anymore — the whole point
+   * of the async pattern is for the user to keep working while it runs.
+   */
   function openReview() {
-    setReviewModalOpen(true);
-    // If there's no job yet, or the previous one errored, kick a new one.
-    // If a job is pending or complete, just open the modal and show state.
-    if (!reviewJob || reviewJob.status === 'error') {
+    if (reviewJob?.status === 'pending' || reviewStarting) {
+      // Already running — clicking again would just cancel any pending
+      // intent; keep it simple and ignore.
+      return;
+    }
+    if (!reviewJob) {
+      // First time on this POC — kick the job, don't open the modal.
       void startReview();
+      return;
+    }
+    if (reviewJob.status === 'complete' || reviewJob.status === 'error') {
+      // We have a result (or an error) to show — open the modal.
+      setReviewModalOpen(true);
     }
   }
 
@@ -601,7 +623,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
               error={reviewIconState.error}
               title={
                 reviewIconState.loading
-                  ? 'AI review running in the background — click to view progress'
+                  ? 'AI review running in the background — icon will turn green when done'
                   : reviewIconState.complete
                   ? 'AI review complete — click to view results'
                   : reviewIconState.error
@@ -795,7 +817,15 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
             <p className="text-[12px] text-[var(--color-danger)]">
               {reviewJob.errorMessage ?? 'Review failed'}
             </p>
-            <Button size="sm" variant="ghost" onClick={() => void startReview()} className="mt-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setReviewModalOpen(false);
+                void startReview();
+              }}
+              className="mt-2"
+            >
               Try again
             </Button>
           </div>
@@ -806,7 +836,15 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
             <p className="text-[12px] text-[var(--color-danger)]">
               AI returned a response in an unexpected format. Please try again.
             </p>
-            <Button size="sm" variant="ghost" onClick={() => void startReview()} className="mt-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setReviewModalOpen(false);
+                void startReview();
+              }}
+              className="mt-2"
+            >
               Re-run
             </Button>
           </div>
@@ -891,7 +929,10 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-[var(--color-border)]">
           <Button
             variant="ghost"
-            onClick={() => void startReview()}
+            onClick={() => {
+              setReviewModalOpen(false);
+              void startReview();
+            }}
             disabled={reviewJob?.status === 'pending' || reviewStarting}
           >
             Re-run

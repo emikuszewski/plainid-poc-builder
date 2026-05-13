@@ -66,22 +66,49 @@ export async function generate(opts: AiGenerateOptions): Promise<AiGenerateResul
       modelId: opts.modelId,
     });
 
-    if (response.errors?.length) {
-      throw new Error(response.errors[0]?.message ?? 'AI request failed');
+    // Diagnostic log — short-lived; remove once Suggest is verified working
+    // again post-schema-change. Helps see exactly what Amplify is returning
+    // on the wire when the response shape is ambiguous.
+    // eslint-disable-next-line no-console
+    console.debug('[ai.generate] raw response', response);
+
+    // AppSync sometimes returns errors AND data; check both.
+    const errs = (response as any)?.errors;
+    if (errs && Array.isArray(errs) && errs.length > 0) {
+      throw new Error(errs[0]?.message ?? 'AI request failed');
     }
-    const data = response.data as
-      | { text: string; inputTokens?: number; outputTokens?: number }
-      | null;
-    if (!data?.text) {
-      throw new Error('Empty AI response');
+
+    // Tolerate both shapes we've seen Amplify return:
+    //   { data: { text, inputTokens, outputTokens } }  ← typical
+    //   { data: { aiGenerate: { text, ... } } }        ← if the gen client
+    //                                                    wraps by mutation name
+    //   raw object: { text, ... }                       ← edge case
+    const raw: any = response as any;
+    const candidate =
+      raw?.data?.aiGenerate ??
+      raw?.data ??
+      raw;
+
+    const text: string | undefined =
+      typeof candidate?.text === 'string' ? candidate.text : undefined;
+    const inputTokens: number =
+      typeof candidate?.inputTokens === 'number' ? candidate.inputTokens : 0;
+    const outputTokens: number =
+      typeof candidate?.outputTokens === 'number' ? candidate.outputTokens : 0;
+
+    if (!text || !text.trim()) {
+      // eslint-disable-next-line no-console
+      console.warn('[ai.generate] response missing text field', response);
+      throw new Error(
+        'AI returned an empty or unexpected response. Check the console for details.',
+      );
     }
-    result = {
-      text: data.text,
-      inputTokens: data.inputTokens ?? 0,
-      outputTokens: data.outputTokens ?? 0,
-    };
+
+    result = { text, inputTokens, outputTokens };
   } catch (err: any) {
     errorMessage = err?.message ?? 'AI request failed';
+    // eslint-disable-next-line no-console
+    console.warn('[ai.generate] failed', err);
   }
 
   // Fire-and-forget log write — don't block the caller on log success/failure.
