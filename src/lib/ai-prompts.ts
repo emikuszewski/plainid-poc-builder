@@ -320,7 +320,7 @@ Order issues by severity (critical first). Aim for 4–10 issues total — not a
     system: SE_SYSTEM,
     prompt,
     maxTokens: 2500,
-    modelId: 'us.anthropic.claude-opus-4-6',
+    modelId: 'us.anthropic.claude-opus-4-6-v1',
   };
 }
 

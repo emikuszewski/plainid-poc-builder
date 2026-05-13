@@ -43,7 +43,7 @@ const DEFAULT_MODEL_ID =
 // Bedrock-Marketplace gating in our account — Opus + Sonnet are not).
 const ALLOWED_MODEL_IDS = new Set<string>([
   'us.anthropic.claude-sonnet-4-6',
-  'us.anthropic.claude-opus-4-6',
+  'us.anthropic.claude-opus-4-6-v1',
   'us.anthropic.claude-haiku-4-5-20251001-v1:0',
 ]);
 

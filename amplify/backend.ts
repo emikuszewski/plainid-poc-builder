@@ -44,12 +44,12 @@ backend.aiGenerate.resources.lambda.addToRolePolicy(
       'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6',
       'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6',
       // Opus 4.6 — inference profile + foundation model
-      'arn:aws:bedrock:us-east-1:*:inference-profile/us.anthropic.claude-opus-4-6',
-      'arn:aws:bedrock:us-east-2:*:inference-profile/us.anthropic.claude-opus-4-6',
-      'arn:aws:bedrock:us-west-2:*:inference-profile/us.anthropic.claude-opus-4-6',
-      'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-opus-4-6',
-      'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-opus-4-6',
-      'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-opus-4-6',
+      'arn:aws:bedrock:us-east-1:*:inference-profile/us.anthropic.claude-opus-4-6-v1',
+      'arn:aws:bedrock:us-east-2:*:inference-profile/us.anthropic.claude-opus-4-6-v1',
+      'arn:aws:bedrock:us-west-2:*:inference-profile/us.anthropic.claude-opus-4-6-v1',
+      'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-opus-4-6-v1',
+      'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-opus-4-6-v1',
+      'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-opus-4-6-v1',
       // Haiku 4.5 — inference profile in every source region
       'arn:aws:bedrock:us-east-1:*:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0',
       'arn:aws:bedrock:us-east-2:*:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0',
