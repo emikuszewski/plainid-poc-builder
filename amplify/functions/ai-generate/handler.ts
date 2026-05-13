@@ -73,14 +73,15 @@ async function resolveAiJobTable(): Promise<string> {
   let exclusiveStartTableName: string | undefined = undefined;
   for (let i = 0; i < 10; i += 1) {
     // Safety cap on pagination — 10 pages * 100 tables = 1000 tables max
-    const resp = await ddbRaw.send(
-      new ListTablesCommand({
-        ExclusiveStartTableName: exclusiveStartTableName,
-        Limit: 100,
-      }),
-    );
-    const names = resp.TableNames ?? [];
-    const match = names.find((n) => n.startsWith('AiJob-'));
+    const resp: { TableNames?: string[]; LastEvaluatedTableName?: string } =
+      await ddbRaw.send(
+        new ListTablesCommand({
+          ExclusiveStartTableName: exclusiveStartTableName,
+          Limit: 100,
+        }),
+      );
+    const names: string[] = resp.TableNames ?? [];
+    const match = names.find((n: string) => n.startsWith('AiJob-'));
     if (match) {
       cachedAiJobTableName = match;
       return match;
