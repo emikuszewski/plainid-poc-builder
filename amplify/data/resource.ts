@@ -289,6 +289,44 @@ const schema = a
       .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
 
     /**
+     * In-scope system catalog entries. Each entry is a customer-facing
+     * system label (Snowflake, Apigee, Databricks, …) with its category,
+     * implied authorizer, and a default POC Focus paragraph. The picker
+     * on the Discovery section reads from this catalog. Category values
+     * mirror UseCaseCategory: 'Data' | 'API Gateway' | 'AI Authorization'
+     * | 'Application'.
+     */
+    AdminDefaultSystemCatalogEntry: a
+      .model({
+        name: a.string().required(),
+        category: a.string().required(),
+        authorizerId: a.string().required(),
+        defaultFocus: a.string().required(),
+        sortOrder: a.integer().required(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    /**
+     * Identity provider catalog entries. Each entry is an IdP product
+     * label (Okta, Entra, Active Directory, SailPoint, …) with its
+     * provider type, default IdentitySource.type value, and default
+     * notes paragraph. The IdP picker on the Discovery section reads
+     * from this catalog. providerType values: 'Cloud IdP' | 'Directory'
+     * | 'IGA'.
+     */
+    AdminDefaultIdentityProviderEntry: a
+      .model({
+        name: a.string().required(),
+        providerType: a.string().required(),
+        defaultType: a.string().required(),
+        defaultNotes: a.string().required(),
+        sortOrder: a.integer().required(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    /**
      * Append-only audit log for all admin-defaults writes. Every create /
      * update / delete on an Admin* model writes one row here. Powers the
      * Admin → Activity tab. Authorization is broad (anyone can read +

@@ -17,8 +17,6 @@ import type {
   PlainIdTeamCatalogEntry,
 } from '../../types';
 import {
-  SYSTEM_CATALOG,
-  IDENTITY_PROVIDER_CATALOG,
   PLAINID_TEAM_CATALOG,
 } from '../../types';
 import {
@@ -39,7 +37,12 @@ import { generate } from '../../lib/ai';
 import { buildFieldSuggestPrompt, FIELD_PROMPTS } from '../../lib/ai-prompts';
 import { tenantStrategyDefault } from '../../lib/seed-data';
 import type { TenantStrategyChoice } from '../../lib/seed-data';
-import { useDefaults, projectTenantStrategyTemplates } from '../../lib/defaults-context';
+import {
+  useDefaults,
+  projectTenantStrategyTemplates,
+  projectSystemCatalog,
+  projectIdentityProviders,
+} from '../../lib/defaults-context';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -329,6 +332,11 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
   // tenantStrategyDefault() substitutes `{{customer}}` placeholders.
   const defaults = useDefaults();
   const tenantTemplates = projectTenantStrategyTemplates(defaults.boilerplate);
+  // System & IdP catalogs flow through here so the pickers stay editable
+  // from the Admin console. Each falls back to its hardcoded baseline when
+  // its admin table is empty.
+  const systemCatalog = projectSystemCatalog(defaults.systemCatalog);
+  const identityProviderCatalog = projectIdentityProviders(defaults.identityProviders);
 
   // Collapsible card state — new rows auto-open, existing rows open on click.
   const systemsExpanded = useExpandedSet(poc.inScopeSystems.map((s) => s.id));
@@ -726,7 +734,7 @@ Agentic AI use cases — tracked separately`}
           {(['Data', 'API Gateway', 'AI Authorization', 'Application'] as UseCaseCategory[]).map(
             (cat) => {
               const filterLower = systemFilter.trim().toLowerCase();
-              const items = SYSTEM_CATALOG.filter(
+              const items = systemCatalog.filter(
                 (s) =>
                   s.category === cat &&
                   (!filterLower ||
@@ -764,7 +772,7 @@ Agentic AI use cases — tracked separately`}
               );
             },
           )}
-          {SYSTEM_CATALOG.filter(
+          {systemCatalog.filter(
             (s) =>
               !systemFilter.trim() ||
               s.name.toLowerCase().includes(systemFilter.trim().toLowerCase()) ||
@@ -802,7 +810,7 @@ Agentic AI use cases — tracked separately`}
         <div className="mt-3 max-h-[480px] overflow-y-auto pr-1">
           {(['Cloud IdP', 'Directory', 'IGA'] as IdpProviderType[]).map((ptype) => {
             const filterLower = idpFilter.trim().toLowerCase();
-            const items = IDENTITY_PROVIDER_CATALOG.filter(
+            const items = identityProviderCatalog.filter(
               (e) =>
                 e.providerType === ptype &&
                 (!filterLower ||
@@ -843,7 +851,7 @@ Agentic AI use cases — tracked separately`}
               </div>
             );
           })}
-          {IDENTITY_PROVIDER_CATALOG.filter(
+          {identityProviderCatalog.filter(
             (e) =>
               !idpFilter.trim() ||
               e.name.toLowerCase().includes(idpFilter.trim().toLowerCase()) ||

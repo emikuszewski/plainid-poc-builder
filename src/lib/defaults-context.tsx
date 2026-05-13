@@ -6,6 +6,8 @@ import {
   listAdminReferenceDocs,
   listAdminSprints,
   listAdminBoilerplate,
+  listAdminSystemCatalog,
+  listAdminIdentityProviders,
   bootstrapAdminDefaults,
 } from './admin-defaults';
 import {
@@ -14,6 +16,10 @@ import {
   DEFAULT_SPRINTS,
   DEFAULT_REFERENCE_DOCS,
 } from './seed-data';
+import {
+  SYSTEM_CATALOG,
+  IDENTITY_PROVIDER_CATALOG,
+} from '../types';
 import type {
   AdminDefaultTrackerTask,
   AdminDefaultResponsibility,
@@ -21,10 +27,16 @@ import type {
   AdminDefaultReferenceDoc,
   AdminDefaultSprint,
   AdminDefaultBoilerplate,
+  AdminDefaultSystemCatalogEntry,
+  AdminDefaultIdentityProviderEntry,
   TrackerRow,
   Persona,
   Sprint,
   ReferenceDoc,
+  SystemCatalogEntry,
+  IdentityProviderCatalogEntry,
+  UseCaseCategory,
+  IdpProviderType,
 } from '../types';
 
 /**
@@ -46,6 +58,8 @@ export interface DefaultsState {
   referenceDocs: AdminDefaultReferenceDoc[];
   sprints: AdminDefaultSprint[];
   boilerplate: AdminDefaultBoilerplate[];
+  systemCatalog: AdminDefaultSystemCatalogEntry[];
+  identityProviders: AdminDefaultIdentityProviderEntry[];
   loaded: boolean;
   refresh: (key?: keyof DefaultsCatalogs) => Promise<void>;
 }
@@ -58,6 +72,8 @@ export interface DefaultsCatalogs {
   referenceDocs: AdminDefaultReferenceDoc[];
   sprints: AdminDefaultSprint[];
   boilerplate: AdminDefaultBoilerplate[];
+  systemCatalog: AdminDefaultSystemCatalogEntry[];
+  identityProviders: AdminDefaultIdentityProviderEntry[];
 }
 
 const initialState: DefaultsCatalogs = {
@@ -67,6 +83,8 @@ const initialState: DefaultsCatalogs = {
   referenceDocs: [],
   sprints: [],
   boilerplate: [],
+  systemCatalog: [],
+  identityProviders: [],
 };
 
 const DefaultsContext = createContext<DefaultsState>({
@@ -83,7 +101,16 @@ export function DefaultsProvider({ children }: { children: React.ReactNode }) {
     try {
       const tasks: Array<keyof DefaultsCatalogs> = key
         ? [key]
-        : ['tracker', 'responsibilities', 'personas', 'referenceDocs', 'sprints', 'boilerplate'];
+        : [
+            'tracker',
+            'responsibilities',
+            'personas',
+            'referenceDocs',
+            'sprints',
+            'boilerplate',
+            'systemCatalog',
+            'identityProviders',
+          ];
       const partial: Partial<DefaultsCatalogs> = {};
       await Promise.all(
         tasks.map(async (k) => {
@@ -105,6 +132,12 @@ export function DefaultsProvider({ children }: { children: React.ReactNode }) {
               break;
             case 'boilerplate':
               partial.boilerplate = await listAdminBoilerplate();
+              break;
+            case 'systemCatalog':
+              partial.systemCatalog = await listAdminSystemCatalog();
+              break;
+            case 'identityProviders':
+              partial.identityProviders = await listAdminIdentityProviders();
               break;
           }
         }),
@@ -258,4 +291,41 @@ export function projectTenantStrategyTemplates(
     }
   }
   return out;
+}
+
+/**
+ * Project the admin system catalog into the SystemCatalogEntry shape the
+ * Discovery picker expects. Falls back to the hardcoded SYSTEM_CATALOG
+ * when the admin table is empty.
+ */
+export function projectSystemCatalog(
+  admin: AdminDefaultSystemCatalogEntry[],
+): SystemCatalogEntry[] {
+  if (admin.length === 0) return SYSTEM_CATALOG;
+  return admin.map((s) => ({
+    id: s.id,
+    name: s.name,
+    category: s.category as UseCaseCategory,
+    authorizerId: s.authorizerId,
+    defaultFocus: s.defaultFocus,
+  }));
+}
+
+/**
+ * Project the admin identity provider catalog into the
+ * IdentityProviderCatalogEntry shape the Discovery picker expects.
+ * Falls back to the hardcoded IDENTITY_PROVIDER_CATALOG when the admin
+ * table is empty.
+ */
+export function projectIdentityProviders(
+  admin: AdminDefaultIdentityProviderEntry[],
+): IdentityProviderCatalogEntry[] {
+  if (admin.length === 0) return IDENTITY_PROVIDER_CATALOG;
+  return admin.map((e) => ({
+    id: e.id,
+    name: e.name,
+    providerType: e.providerType as IdpProviderType,
+    defaultType: e.defaultType,
+    defaultNotes: e.defaultNotes,
+  }));
 }

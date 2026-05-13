@@ -1185,3 +1185,31 @@ export const BOILERPLATE_KEYS = {
   TENANT_STRATEGY_PLAINID: 'tenantStrategy.plainid',
   TENANT_STRATEGY_OTHER: 'tenantStrategy.other',
 } as const;
+
+// ============================================================
+// Admin-managed mirrors of SystemCatalogEntry and IdentityProviderCatalogEntry.
+// The shapes intentionally mirror the originals (minus `category`/`providerType`
+// being plain strings here, since the GraphQL schema doesn't support enum
+// unions). At runtime they're constrained to UseCaseCategory and
+// IdpProviderType values respectively.
+// ============================================================
+
+export interface AdminDefaultSystemCatalogEntry {
+  id: string;
+  name: string;
+  category: string; // mirrors UseCaseCategory at runtime
+  authorizerId: string;
+  defaultFocus: string;
+  sortOrder: number;
+  isDeleted?: boolean | null;
+}
+
+export interface AdminDefaultIdentityProviderEntry {
+  id: string;
+  name: string;
+  providerType: string; // mirrors IdpProviderType at runtime
+  defaultType: string;
+  defaultNotes: string;
+  sortOrder: number;
+  isDeleted?: boolean | null;
+}

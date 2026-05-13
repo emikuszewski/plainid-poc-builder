@@ -7,6 +7,8 @@ import type {
   AdminDefaultReferenceDoc,
   AdminDefaultSprint,
   AdminDefaultBoilerplate,
+  AdminDefaultSystemCatalogEntry,
+  AdminDefaultIdentityProviderEntry,
   AdminAuditLogEntry,
 } from '../types';
 
@@ -558,6 +560,7 @@ import {
   DEFAULT_SPRINTS,
   DEFAULT_REFERENCE_DOCS,
 } from './seed-data';
+import { SYSTEM_CATALOG, IDENTITY_PROVIDER_CATALOG } from '../types';
 
 interface BootstrapResult {
   trackerSeeded: number;
@@ -566,6 +569,8 @@ interface BootstrapResult {
   referenceDocsSeeded: number;
   sprintsSeeded: number;
   boilerplateSeeded: number;
+  systemCatalogSeeded: number;
+  identityProvidersSeeded: number;
 }
 
 /**
@@ -587,6 +592,8 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
     referenceDocsSeeded: 0,
     sprintsSeeded: 0,
     boilerplateSeeded: 0,
+    systemCatalogSeeded: 0,
+    identityProvidersSeeded: 0,
   };
 
   // --- Tracker tasks ---
@@ -809,6 +816,60 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
     console.warn('bootstrap boilerplate list failed', err);
   }
 
+  // --- System catalog ---
+  try {
+    const { data: existing } = await c.models.AdminDefaultSystemCatalogEntry.list();
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
+      for (let i = 0; i < SYSTEM_CATALOG.length; i++) {
+        const s = SYSTEM_CATALOG[i];
+        try {
+          await c.models.AdminDefaultSystemCatalogEntry.create({
+            name: s.name,
+            category: s.category,
+            authorizerId: s.authorizerId,
+            defaultFocus: s.defaultFocus,
+            sortOrder: (i + 1) * 10,
+            isDeleted: false,
+          });
+          result.systemCatalogSeeded++;
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('bootstrap system catalog seed failed for', s.name, err);
+        }
+      }
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('bootstrap system catalog list failed', err);
+  }
+
+  // --- Identity provider catalog ---
+  try {
+    const { data: existing } = await c.models.AdminDefaultIdentityProviderEntry.list();
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
+      for (let i = 0; i < IDENTITY_PROVIDER_CATALOG.length; i++) {
+        const e = IDENTITY_PROVIDER_CATALOG[i];
+        try {
+          await c.models.AdminDefaultIdentityProviderEntry.create({
+            name: e.name,
+            providerType: e.providerType,
+            defaultType: e.defaultType,
+            defaultNotes: e.defaultNotes,
+            sortOrder: (i + 1) * 10,
+            isDeleted: false,
+          });
+          result.identityProvidersSeeded++;
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('bootstrap identity provider seed failed for', e.name, err);
+        }
+      }
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('bootstrap identity provider list failed', err);
+  }
+
   return result;
 }
 
@@ -918,4 +979,164 @@ export function resolveTenantStrategyTemplate(
   const tpl = row?.value ?? '';
   const customer = customerName.trim() || 'the customer';
   return tpl.replace(/\{\{customer\}\}/g, customer);
+}
+
+// ============================================================
+// System catalog
+// ============================================================
+
+export async function listAdminSystemCatalog(): Promise<AdminDefaultSystemCatalogEntry[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultSystemCatalogEntry.list();
+  if (errors?.length) throw new Error(errors[0]?.message ?? 'list failed');
+  return liveAndSorted<AdminDefaultSystemCatalogEntry>(data ?? []);
+}
+
+export async function createAdminSystemCatalogEntry(
+  input: Omit<AdminDefaultSystemCatalogEntry, 'id' | 'isDeleted'>,
+): Promise<AdminDefaultSystemCatalogEntry> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultSystemCatalogEntry.create({
+    ...input,
+    isDeleted: false,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'create failed');
+  await writeAudit({
+    action: 'create',
+    modelName: 'AdminDefaultSystemCatalogEntry',
+    recordId: data.id,
+    summary: `Added system "${input.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultSystemCatalogEntry;
+}
+
+export async function updateAdminSystemCatalogEntry(
+  id: string,
+  patch: Partial<Omit<AdminDefaultSystemCatalogEntry, 'id' | 'isDeleted'>>,
+): Promise<AdminDefaultSystemCatalogEntry> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultSystemCatalogEntry.update({ id, ...patch });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'update failed');
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultSystemCatalogEntry',
+    recordId: id,
+    summary: `Updated system "${data.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultSystemCatalogEntry;
+}
+
+export async function deleteAdminSystemCatalogEntry(id: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultSystemCatalogEntry.update({
+    id,
+    isDeleted: true,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'delete failed');
+  await writeAudit({
+    action: 'delete',
+    modelName: 'AdminDefaultSystemCatalogEntry',
+    recordId: id,
+    summary: `Removed system "${data.name}"`,
+    snapshot: data,
+  });
+}
+
+export async function resetSystemCatalogToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const removed = await softDeleteAllLive(c.models.AdminDefaultSystemCatalogEntry);
+  await bootstrapAdminDefaults();
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultSystemCatalogEntry',
+    recordId: 'reset',
+    summary: `Reset system catalog defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
+  });
+}
+
+// ============================================================
+// Identity provider catalog
+// ============================================================
+
+export async function listAdminIdentityProviders(): Promise<AdminDefaultIdentityProviderEntry[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultIdentityProviderEntry.list();
+  if (errors?.length) throw new Error(errors[0]?.message ?? 'list failed');
+  return liveAndSorted<AdminDefaultIdentityProviderEntry>(data ?? []);
+}
+
+export async function createAdminIdentityProvider(
+  input: Omit<AdminDefaultIdentityProviderEntry, 'id' | 'isDeleted'>,
+): Promise<AdminDefaultIdentityProviderEntry> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultIdentityProviderEntry.create({
+    ...input,
+    isDeleted: false,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'create failed');
+  await writeAudit({
+    action: 'create',
+    modelName: 'AdminDefaultIdentityProviderEntry',
+    recordId: data.id,
+    summary: `Added identity provider "${input.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultIdentityProviderEntry;
+}
+
+export async function updateAdminIdentityProvider(
+  id: string,
+  patch: Partial<Omit<AdminDefaultIdentityProviderEntry, 'id' | 'isDeleted'>>,
+): Promise<AdminDefaultIdentityProviderEntry> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultIdentityProviderEntry.update({ id, ...patch });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'update failed');
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultIdentityProviderEntry',
+    recordId: id,
+    summary: `Updated identity provider "${data.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultIdentityProviderEntry;
+}
+
+export async function deleteAdminIdentityProvider(id: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultIdentityProviderEntry.update({
+    id,
+    isDeleted: true,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'delete failed');
+  await writeAudit({
+    action: 'delete',
+    modelName: 'AdminDefaultIdentityProviderEntry',
+    recordId: id,
+    summary: `Removed identity provider "${data.name}"`,
+    snapshot: data,
+  });
+}
+
+export async function resetIdentityProvidersToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const removed = await softDeleteAllLive(c.models.AdminDefaultIdentityProviderEntry);
+  await bootstrapAdminDefaults();
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultIdentityProviderEntry',
+    recordId: 'reset',
+    summary: `Reset identity provider defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
+  });
 }

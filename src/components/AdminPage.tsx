@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button, Pill } from './ui/Primitives';
+import { Button, Pill, Modal, Field } from './ui/Primitives';
 import { useDefaults } from '../lib/defaults-context';
 import {
   createTrackerTask,
@@ -25,6 +25,14 @@ import {
   resetSprintsToDefaults,
   setBoilerplateValue,
   resetBoilerplateToDefaults,
+  createAdminSystemCatalogEntry,
+  updateAdminSystemCatalogEntry,
+  deleteAdminSystemCatalogEntry,
+  resetSystemCatalogToDefaults,
+  createAdminIdentityProvider,
+  updateAdminIdentityProvider,
+  deleteAdminIdentityProvider,
+  resetIdentityProvidersToDefaults,
   listAuditLog,
 } from '../lib/admin-defaults';
 import type {
@@ -34,6 +42,8 @@ import type {
   AdminDefaultReferenceDoc,
   AdminDefaultSprint,
   AdminDefaultBoilerplate,
+  AdminDefaultSystemCatalogEntry,
+  AdminDefaultIdentityProviderEntry,
   AdminAuditLogEntry,
 } from '../types';
 
@@ -60,6 +70,8 @@ const TABS = [
   { id: 'personas', label: 'Personas', shortLabel: 'PER' },
   { id: 'docs', label: 'Reference Docs', shortLabel: 'DOC' },
   { id: 'sprints', label: 'Sprints', shortLabel: 'SPR' },
+  { id: 'systems', label: 'In-scope Systems', shortLabel: 'SYS' },
+  { id: 'idps', label: 'Identity Providers', shortLabel: 'IDP' },
   { id: 'boilerplate', label: 'Boilerplate', shortLabel: 'COP' },
 ] as const;
 
@@ -107,6 +119,8 @@ export function AdminPage() {
       {activeTab === 'personas' && <PersonasTab />}
       {activeTab === 'docs' && <ReferenceDocsTab />}
       {activeTab === 'sprints' && <SprintsTab />}
+      {activeTab === 'systems' && <SystemCatalogTab />}
+      {activeTab === 'idps' && <IdentityProvidersTab />}
       {activeTab === 'boilerplate' && <BoilerplateTab />}
     </div>
   );
@@ -1547,5 +1561,583 @@ function BoilerplateEditor({
         </div>
       </div>
     </section>
+  );
+}
+
+// ============================================================
+// In-scope Systems tab — card grid grouped by category, click
+// a card to edit it in a modal. Mirrors the picker UX in the
+// POC Discovery section so the visual model stays consistent.
+// ============================================================
+
+const SYSTEM_CATEGORIES: Array<'Data' | 'API Gateway' | 'AI Authorization' | 'Application'> = [
+  'Data',
+  'API Gateway',
+  'AI Authorization',
+  'Application',
+];
+
+function SystemCatalogTab() {
+  const { systemCatalog, refresh, loaded } = useDefaults();
+  const [editing, setEditing] = useState<AdminDefaultSystemCatalogEntry | null>(null);
+  const [creatingCategory, setCreatingCategory] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState('');
+
+  const byCategory = useMemo(() => {
+    const m = new Map<string, AdminDefaultSystemCatalogEntry[]>();
+    const f = filter.trim().toLowerCase();
+    for (const s of systemCatalog) {
+      if (
+        f &&
+        !s.name.toLowerCase().includes(f) &&
+        !s.defaultFocus.toLowerCase().includes(f)
+      )
+        continue;
+      const arr = m.get(s.category) ?? [];
+      arr.push(s);
+      m.set(s.category, arr);
+    }
+    return m;
+  }, [systemCatalog, filter]);
+
+  const handleSave = async (
+    patch: Omit<AdminDefaultSystemCatalogEntry, 'id' | 'isDeleted'>,
+    existingId: string | null,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (existingId) {
+        await updateAdminSystemCatalogEntry(existingId, patch);
+      } else {
+        await createAdminSystemCatalogEntry(patch);
+      }
+      await refresh('systemCatalog');
+      setEditing(null);
+      setCreatingCategory(null);
+    } catch (err: any) {
+      setError(err?.message ?? 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove "${name}" from the system catalog?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAdminSystemCatalogEntry(id);
+      await refresh('systemCatalog');
+      setEditing(null);
+    } catch (err: any) {
+      setError(err?.message ?? 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Reset system catalog defaults to the factory list?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await resetSystemCatalogToDefaults();
+      await refresh('systemCatalog');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!loaded) return <div className="text-[12.5px] text-[var(--color-text-muted)]">Loading…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {systemCatalog.length} system{systemCatalog.length === 1 ? '' : 's'}. The Discovery
+          section's picker reads from this catalog. Use{' '}
+          <code className="mono text-[11px]">{'{customer}'}</code> in the default focus —
+          it's substituted with the POC's customer name at pick time.
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
+      </div>
+
+      <Field label="Search">
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="snowflake, apigee, …"
+        />
+      </Field>
+
+      {error && (
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      {SYSTEM_CATEGORIES.map((cat) => {
+        const items = byCategory.get(cat) ?? [];
+        if (items.length === 0 && filter.trim()) return null;
+        return (
+          <section key={cat} className="space-y-2">
+            <div className="flex items-baseline gap-2">
+              <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
+                {cat.toUpperCase()}
+              </span>
+              <span className="text-[10.5px] text-[var(--color-text-dim)]">
+                {items.length} item{items.length === 1 ? '' : 's'}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setCreatingCategory(cat)}
+                disabled={busy}
+                className="ml-auto"
+              >
+                + System
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {items.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setEditing(s)}
+                  className="text-left p-2.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                >
+                  <div className="text-[12.5px] font-medium text-[var(--color-text)] mb-0.5">
+                    {s.name}
+                  </div>
+                  <div className="text-[11px] text-[var(--color-text-muted)] line-clamp-2 leading-snug">
+                    {s.defaultFocus}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      <SystemCatalogEditor
+        open={editing !== null || creatingCategory !== null}
+        initial={
+          editing ?? {
+            id: '',
+            name: '',
+            category: creatingCategory ?? 'Data',
+            authorizerId: '',
+            defaultFocus: '',
+            sortOrder:
+              systemCatalog.length > 0
+                ? Math.max(...systemCatalog.map((s) => s.sortOrder ?? 0)) + 10
+                : 10,
+          }
+        }
+        busy={busy}
+        onClose={() => {
+          setEditing(null);
+          setCreatingCategory(null);
+        }}
+        onSave={(p) => handleSave(p, editing?.id ?? null)}
+        onDelete={
+          editing ? () => void handleDelete(editing.id, editing.name) : undefined
+        }
+      />
+    </div>
+  );
+}
+
+function SystemCatalogEditor({
+  open,
+  initial,
+  busy,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  open: boolean;
+  initial: AdminDefaultSystemCatalogEntry;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (patch: Omit<AdminDefaultSystemCatalogEntry, 'id' | 'isDeleted'>) => Promise<void>;
+  onDelete?: () => void;
+}) {
+  const [name, setName] = useState(initial.name);
+  const [category, setCategory] = useState(initial.category);
+  const [authorizerId, setAuthorizerId] = useState(initial.authorizerId);
+  const [defaultFocus, setDefaultFocus] = useState(initial.defaultFocus);
+
+  useEffect(() => {
+    if (open) {
+      setName(initial.name);
+      setCategory(initial.category);
+      setAuthorizerId(initial.authorizerId);
+      setDefaultFocus(initial.defaultFocus);
+    }
+  }, [open, initial]);
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={initial.id ? 'Edit system' : 'Add system'}
+      width={560}
+    >
+      <div className="space-y-3">
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+        <Field label="Category">
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            {SYSTEM_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Authorizer ID">
+          <input
+            value={authorizerId}
+            onChange={(e) => setAuthorizerId(e.target.value)}
+            placeholder="e.g. snowflake-authorizer"
+          />
+        </Field>
+        <Field label="Default focus (uses {customer} as placeholder)">
+          <textarea
+            rows={6}
+            value={defaultFocus}
+            onChange={(e) => setDefaultFocus(e.target.value)}
+          />
+        </Field>
+      </div>
+      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[var(--color-border)]">
+        <Button
+          variant="primary"
+          onClick={() =>
+            void onSave({
+              name: name.trim(),
+              category: category.trim(),
+              authorizerId: authorizerId.trim(),
+              defaultFocus: defaultFocus.trim(),
+              sortOrder: initial.sortOrder,
+            })
+          }
+          disabled={busy || !name.trim() || !category.trim() || !authorizerId.trim()}
+        >
+          Save
+        </Button>
+        <Button variant="ghost" onClick={onClose} disabled={busy}>
+          Cancel
+        </Button>
+        {onDelete && (
+          <Button
+            variant="ghost"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto text-[var(--color-danger)]"
+          >
+            Delete
+          </Button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// ============================================================
+// Identity Providers tab — same card-grid pattern, grouped by
+// providerType (Cloud IdP / Directory / IGA).
+// ============================================================
+
+const IDP_TYPES: Array<'Cloud IdP' | 'Directory' | 'IGA'> = ['Cloud IdP', 'Directory', 'IGA'];
+
+function IdentityProvidersTab() {
+  const { identityProviders, refresh, loaded } = useDefaults();
+  const [editing, setEditing] = useState<AdminDefaultIdentityProviderEntry | null>(null);
+  const [creatingType, setCreatingType] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState('');
+
+  const byType = useMemo(() => {
+    const m = new Map<string, AdminDefaultIdentityProviderEntry[]>();
+    const f = filter.trim().toLowerCase();
+    for (const e of identityProviders) {
+      if (
+        f &&
+        !e.name.toLowerCase().includes(f) &&
+        !e.defaultNotes.toLowerCase().includes(f)
+      )
+        continue;
+      const arr = m.get(e.providerType) ?? [];
+      arr.push(e);
+      m.set(e.providerType, arr);
+    }
+    return m;
+  }, [identityProviders, filter]);
+
+  const handleSave = async (
+    patch: Omit<AdminDefaultIdentityProviderEntry, 'id' | 'isDeleted'>,
+    existingId: string | null,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (existingId) {
+        await updateAdminIdentityProvider(existingId, patch);
+      } else {
+        await createAdminIdentityProvider(patch);
+      }
+      await refresh('identityProviders');
+      setEditing(null);
+      setCreatingType(null);
+    } catch (err: any) {
+      setError(err?.message ?? 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove "${name}" from the identity provider catalog?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAdminIdentityProvider(id);
+      await refresh('identityProviders');
+      setEditing(null);
+    } catch (err: any) {
+      setError(err?.message ?? 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Reset identity provider defaults to the factory list?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await resetIdentityProvidersToDefaults();
+      await refresh('identityProviders');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!loaded) return <div className="text-[12.5px] text-[var(--color-text-muted)]">Loading…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {identityProviders.length} provider{identityProviders.length === 1 ? '' : 's'}. The
+          Discovery section's IdP picker reads from this catalog. Picking a row pre-fills
+          the IdentitySource type + notes on a new POC row.
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
+      </div>
+
+      <Field label="Search">
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="okta, active directory, …"
+        />
+      </Field>
+
+      {error && (
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      {IDP_TYPES.map((ptype) => {
+        const items = byType.get(ptype) ?? [];
+        if (items.length === 0 && filter.trim()) return null;
+        return (
+          <section key={ptype} className="space-y-2">
+            <div className="flex items-baseline gap-2">
+              <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
+                {ptype.toUpperCase()}
+              </span>
+              <span className="text-[10.5px] text-[var(--color-text-dim)]">
+                {items.length} item{items.length === 1 ? '' : 's'}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setCreatingType(ptype)}
+                disabled={busy}
+                className="ml-auto"
+              >
+                + Provider
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {items.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => setEditing(e)}
+                  className="text-left p-2.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                >
+                  <div className="flex items-baseline gap-2 mb-0.5">
+                    <span className="text-[12.5px] font-medium text-[var(--color-text)]">
+                      {e.name}
+                    </span>
+                    <span className="mono text-[10px] text-[var(--color-text-dim)] tracking-wider">
+                      {e.defaultType}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[var(--color-text-muted)] line-clamp-2 leading-snug">
+                    {e.defaultNotes}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      <IdentityProviderEditor
+        open={editing !== null || creatingType !== null}
+        initial={
+          editing ?? {
+            id: '',
+            name: '',
+            providerType: creatingType ?? 'Cloud IdP',
+            defaultType: 'Primary IdP',
+            defaultNotes: '',
+            sortOrder:
+              identityProviders.length > 0
+                ? Math.max(...identityProviders.map((e) => e.sortOrder ?? 0)) + 10
+                : 10,
+          }
+        }
+        busy={busy}
+        onClose={() => {
+          setEditing(null);
+          setCreatingType(null);
+        }}
+        onSave={(p) => handleSave(p, editing?.id ?? null)}
+        onDelete={
+          editing ? () => void handleDelete(editing.id, editing.name) : undefined
+        }
+      />
+    </div>
+  );
+}
+
+function IdentityProviderEditor({
+  open,
+  initial,
+  busy,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  open: boolean;
+  initial: AdminDefaultIdentityProviderEntry;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (patch: Omit<AdminDefaultIdentityProviderEntry, 'id' | 'isDeleted'>) => Promise<void>;
+  onDelete?: () => void;
+}) {
+  const [name, setName] = useState(initial.name);
+  const [providerType, setProviderType] = useState(initial.providerType);
+  const [defaultType, setDefaultType] = useState(initial.defaultType);
+  const [defaultNotes, setDefaultNotes] = useState(initial.defaultNotes);
+
+  useEffect(() => {
+    if (open) {
+      setName(initial.name);
+      setProviderType(initial.providerType);
+      setDefaultType(initial.defaultType);
+      setDefaultNotes(initial.defaultNotes);
+    }
+  }, [open, initial]);
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={initial.id ? 'Edit identity provider' : 'Add identity provider'}
+      width={560}
+    >
+      <div className="space-y-3">
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+        <Field label="Provider type">
+          <select value={providerType} onChange={(e) => setProviderType(e.target.value)}>
+            {IDP_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Default IdentitySource type">
+          <input
+            value={defaultType}
+            onChange={(e) => setDefaultType(e.target.value)}
+            placeholder="e.g. Primary IdP, IGA, Directory"
+          />
+        </Field>
+        <Field label="Default notes">
+          <textarea
+            rows={5}
+            value={defaultNotes}
+            onChange={(e) => setDefaultNotes(e.target.value)}
+          />
+        </Field>
+      </div>
+      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[var(--color-border)]">
+        <Button
+          variant="primary"
+          onClick={() =>
+            void onSave({
+              name: name.trim(),
+              providerType: providerType.trim(),
+              defaultType: defaultType.trim(),
+              defaultNotes: defaultNotes.trim(),
+              sortOrder: initial.sortOrder,
+            })
+          }
+          disabled={busy || !name.trim() || !providerType.trim() || !defaultType.trim()}
+        >
+          Save
+        </Button>
+        <Button variant="ghost" onClick={onClose} disabled={busy}>
+          Cancel
+        </Button>
+        {onDelete && (
+          <Button
+            variant="ghost"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto text-[var(--color-danger)]"
+          >
+            Delete
+          </Button>
+        )}
+      </div>
+    </Modal>
   );
 }
