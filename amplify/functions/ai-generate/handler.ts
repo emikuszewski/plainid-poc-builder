@@ -1,6 +1,6 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, ListTablesCommand } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -50,9 +50,13 @@ const ALLOWED_MODEL_IDS = new Set<string>([
 const HARD_MAX_TOKENS = 4096;
 const DEFAULT_MAX_TOKENS = 1500;
 
-// AiJob model table name — injected at deploy time via backend.ts because
-// Amplify generates the actual physical table name.
-const AI_JOB_TABLE = process.env.AI_JOB_TABLE_NAME ?? '';
+// AiJob table name — discovered at runtime by listing DynamoDB tables
+// and finding the one prefixed `AiJob-`. We can't inject the table name
+// via env var here because that would create a CloudFormation circular
+// dependency (the Lambda's config would depend on the AiJob table being
+// created, but the AiJob table's AppSync resolvers depend on the Lambda
+// being available). Resolved once and cached for subsequent invocations.
+let cachedAiJobTableName: string | null = null;
 
 // Self-Lambda function name — set by AWS automatically.
 const SELF_FUNCTION_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME ?? '';
@@ -60,6 +64,32 @@ const SELF_FUNCTION_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME ?? '';
 const bedrock = new BedrockRuntimeClient({ region: REGION });
 const lambda = new LambdaClient({ region: REGION });
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
+const ddbRaw = new DynamoDBClient({ region: REGION });
+
+async function resolveAiJobTable(): Promise<string> {
+  if (cachedAiJobTableName) return cachedAiJobTableName;
+  // Paginate through ListTables until we find the AiJob-* table.
+  // In our account there's exactly one per env, so this is fast.
+  let exclusiveStartTableName: string | undefined = undefined;
+  for (let i = 0; i < 10; i += 1) {
+    // Safety cap on pagination — 10 pages * 100 tables = 1000 tables max
+    const resp = await ddbRaw.send(
+      new ListTablesCommand({
+        ExclusiveStartTableName: exclusiveStartTableName,
+        Limit: 100,
+      }),
+    );
+    const names = resp.TableNames ?? [];
+    const match = names.find((n) => n.startsWith('AiJob-'));
+    if (match) {
+      cachedAiJobTableName = match;
+      return match;
+    }
+    if (!resp.LastEvaluatedTableName) break;
+    exclusiveStartTableName = resp.LastEvaluatedTableName;
+  }
+  throw new Error('Could not find AiJob-* DynamoDB table in this account');
+}
 
 // ============================================================
 // Bedrock invocation
@@ -199,12 +229,10 @@ async function handleSyncGenerate(args: any): Promise<BedrockResult> {
 // ============================================================
 
 async function handleStartAiJob(args: any, ownerEmail: string): Promise<string> {
-  if (!AI_JOB_TABLE) {
-    throw new Error('AI_JOB_TABLE_NAME env var not configured');
-  }
   if (!SELF_FUNCTION_NAME) {
     throw new Error('AWS_LAMBDA_FUNCTION_NAME not available');
   }
+  const tableName = await resolveAiJobTable();
 
   const feature = (args.feature ?? '').toString();
   const pocId = (args.pocId ?? '').toString();
@@ -230,10 +258,10 @@ async function handleStartAiJob(args: any, ownerEmail: string): Promise<string> 
   // Amplify-managed models use a few standard fields and a couple of
   // bookkeeping fields (id, createdAt, updatedAt, owner). We write through
   // the DynamoDB API directly because the Lambda can't easily call its
-  // own AppSync. The `owner` field is the AppSync owner-auth tag.
+  // own AppSync.
   await ddb.send(
     new PutCommand({
-      TableName: AI_JOB_TABLE,
+      TableName: tableName,
       Item: {
         id: jobId,
         ownerEmail,
@@ -275,8 +303,11 @@ async function handleStartAiJob(args: any, ownerEmail: string): Promise<string> 
 // ============================================================
 
 async function runAsyncWork(jobId: string): Promise<void> {
-  if (!AI_JOB_TABLE) {
-    console.error('AI_JOB_TABLE_NAME env var not configured');
+  let tableName: string;
+  try {
+    tableName = await resolveAiJobTable();
+  } catch (err: any) {
+    console.error('Could not resolve AiJob table', err);
     return;
   }
 
@@ -285,7 +316,7 @@ async function runAsyncWork(jobId: string): Promise<void> {
   try {
     const got = await ddb.send(
       new GetCommand({
-        TableName: AI_JOB_TABLE,
+        TableName: tableName,
         Key: { id: jobId },
       }),
     );
@@ -320,7 +351,7 @@ async function runAsyncWork(jobId: string): Promise<void> {
     );
     await ddb.send(
       new UpdateCommand({
-        TableName: AI_JOB_TABLE,
+        TableName: tableName,
         Key: { id: jobId },
         UpdateExpression:
           'SET #s = :s, #r = :r, #i = :i, #o = :o, #c = :c, #u = :u',
@@ -349,10 +380,16 @@ async function runAsyncWork(jobId: string): Promise<void> {
 }
 
 async function markJobError(jobId: string, message: string): Promise<void> {
+  let tableName: string;
+  try {
+    tableName = await resolveAiJobTable();
+  } catch {
+    return;
+  }
   try {
     await ddb.send(
       new UpdateCommand({
-        TableName: AI_JOB_TABLE,
+        TableName: tableName,
         Key: { id: jobId },
         UpdateExpression: 'SET #s = :s, #e = :e, #c = :c, #u = :u',
         ExpressionAttributeNames: {
