@@ -39,6 +39,7 @@ import { generate } from '../../lib/ai';
 import { buildFieldSuggestPrompt, FIELD_PROMPTS } from '../../lib/ai-prompts';
 import { tenantStrategyDefault } from '../../lib/seed-data';
 import type { TenantStrategyChoice } from '../../lib/seed-data';
+import { useDefaults, projectTenantStrategyTemplates } from '../../lib/defaults-context';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -324,6 +325,11 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
   const systemFocusRef = useFocusOnAppend(poc.inScopeSystems.length);
   const identityFocusRef = useFocusOnAppend(poc.identitySources.length);
 
+  // Tenant strategy templates come from the admin boilerplate catalog;
+  // tenantStrategyDefault() substitutes `{{customer}}` placeholders.
+  const defaults = useDefaults();
+  const tenantTemplates = projectTenantStrategyTemplates(defaults.boilerplate);
+
   // Collapsible card state — new rows auto-open, existing rows open on click.
   const systemsExpanded = useExpandedSet(poc.inScopeSystems.map((s) => s.id));
   const idpsExpanded = useExpandedSet(poc.identitySources.map((s) => s.id));
@@ -449,11 +455,12 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
                     const previousDefault = tenantStrategyDefault(
                       poc.tenantStrategyChoice as TenantStrategyChoice,
                       poc.customerName,
+                      tenantTemplates,
                     );
                     const isUntouched =
                       poc.tenantStrategy.trim() === previousDefault.trim();
                     const nextText = isUntouched
-                      ? tenantStrategyDefault(opt.key, poc.customerName)
+                      ? tenantStrategyDefault(opt.key, poc.customerName, tenantTemplates)
                       : poc.tenantStrategy;
                     set({
                       tenantStrategyChoice: opt.key,

@@ -240,3 +240,22 @@ export function projectBoilerplate(
   const row = admin.find((r) => r.key === key);
   return row?.value ?? fallback;
 }
+
+/**
+ * Pull all three tenant-strategy template strings out of the boilerplate
+ * catalog and return them as a map keyed by choice ('customer' / 'plainid'
+ * / 'other'). Used by Sections.tsx to pass into tenantStrategyDefault().
+ * Templates use `{{customer}}` placeholders that the caller substitutes.
+ */
+export function projectTenantStrategyTemplates(
+  admin: AdminDefaultBoilerplate[],
+): Partial<Record<'customer' | 'plainid' | 'other', string>> {
+  const out: Partial<Record<'customer' | 'plainid' | 'other', string>> = {};
+  for (const choice of ['customer', 'plainid', 'other'] as const) {
+    const row = admin.find((r) => r.key === `tenantStrategy.${choice}`);
+    if (row && typeof row.value === 'string') {
+      out[choice] = row.value;
+    }
+  }
+  return out;
+}

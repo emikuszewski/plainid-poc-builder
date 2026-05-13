@@ -23,7 +23,15 @@ import {
   listLibrary,
 } from '../lib/client';
 import { emptyPoc } from '../lib/seed-data';
-import { useDefaults, projectTracker } from '../lib/defaults-context';
+import {
+  useDefaults,
+  projectTracker,
+  projectPersonas,
+  projectSprints,
+  projectReferenceDocs,
+  projectResponsibilities,
+  projectBoilerplate,
+} from '../lib/defaults-context';
 import { emptyTechnicalSpec } from '../lib/technical-spec';
 import { evaluateAll, overallCompleteness } from '../lib/completeness';
 import { downloadDocx, downloadHtml } from '../lib/docx-generator';
@@ -70,9 +78,27 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
     (async () => {
       try {
         if (isNew) {
+          // Build the catalogs object from live admin defaults. Each
+          // projection helper falls back to the hardcoded seed when its
+          // admin catalog is empty — emptyPoc() then layers its own
+          // fallbacks underneath, so the new POC is always populated.
           setPoc(
             emptyPoc(currentUserEmail, {
               tracker: projectTracker(defaults.tracker),
+              sprints: projectSprints(defaults.sprints),
+              personas: projectPersonas(defaults.personas),
+              referenceDocs: projectReferenceDocs(defaults.referenceDocs),
+              customerResponsibilities: projectResponsibilities(
+                defaults.responsibilities,
+                'customer',
+              ) || undefined,
+              plainidResponsibilities: projectResponsibilities(
+                defaults.responsibilities,
+                'plainid',
+              ) || undefined,
+              cadence: projectBoilerplate(defaults.boilerplate, 'cadence', '') || undefined,
+              timelineSummary:
+                projectBoilerplate(defaults.boilerplate, 'timeline.summary', '') || undefined,
             }),
           );
         } else if (id) {
@@ -87,11 +113,22 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         setError(e?.message ?? String(e));
       }
     })();
-    // Re-running this when defaults change isn't important — by the time
-    // the editor is mounted, defaults are loaded. We do depend on
-    // defaults.loaded so the very first new-POC after a fresh page load
-    // waits for defaults to finish loading.
-  }, [id, isNew, currentUserEmail, defaults.loaded, defaults.tracker]);
+    // We depend on `defaults.loaded` so the very first new-POC after a
+    // fresh page load waits for defaults to finish loading. The catalog
+    // arrays themselves are listed too so we re-seed if admin defaults
+    // change mid-session (rare).
+  }, [
+    id,
+    isNew,
+    currentUserEmail,
+    defaults.loaded,
+    defaults.tracker,
+    defaults.sprints,
+    defaults.personas,
+    defaults.referenceDocs,
+    defaults.responsibilities,
+    defaults.boilerplate,
+  ]);
 
   // Load library (for picker)
   useEffect(() => {

@@ -208,6 +208,61 @@ export async function listResponsibilities(): Promise<AdminDefaultResponsibility
   return liveAndSorted<AdminDefaultResponsibility>(data ?? []);
 }
 
+export async function createResponsibility(
+  input: Omit<AdminDefaultResponsibility, 'id' | 'isDeleted'>,
+): Promise<AdminDefaultResponsibility> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultResponsibility.create({
+    ...input,
+    isDeleted: false,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'create failed');
+  await writeAudit({
+    action: 'create',
+    modelName: 'AdminDefaultResponsibility',
+    recordId: data.id,
+    summary: `Added ${input.kind} responsibility "${truncate(input.text)}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultResponsibility;
+}
+
+export async function updateResponsibility(
+  id: string,
+  patch: Partial<Omit<AdminDefaultResponsibility, 'id' | 'isDeleted'>>,
+): Promise<AdminDefaultResponsibility> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultResponsibility.update({ id, ...patch });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'update failed');
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultResponsibility',
+    recordId: id,
+    summary: `Updated ${data.kind} responsibility "${truncate(data.text)}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultResponsibility;
+}
+
+export async function deleteResponsibility(id: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultResponsibility.update({
+    id,
+    isDeleted: true,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'delete failed');
+  await writeAudit({
+    action: 'delete',
+    modelName: 'AdminDefaultResponsibility',
+    recordId: id,
+    summary: `Removed ${data.kind} responsibility "${truncate(data.text)}"`,
+    snapshot: data,
+  });
+}
+
 // ============================================================
 // Personas
 // ============================================================
@@ -218,6 +273,61 @@ export async function listAdminPersonas(): Promise<AdminDefaultPersona[]> {
   const { data, errors } = await c.models.AdminDefaultPersona.list();
   if (errors?.length) throw new Error(errors[0]?.message ?? 'list failed');
   return liveAndSorted<AdminDefaultPersona>(data ?? []);
+}
+
+export async function createAdminPersona(
+  input: Omit<AdminDefaultPersona, 'id' | 'isDeleted'>,
+): Promise<AdminDefaultPersona> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultPersona.create({
+    ...input,
+    isDeleted: false,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'create failed');
+  await writeAudit({
+    action: 'create',
+    modelName: 'AdminDefaultPersona',
+    recordId: data.id,
+    summary: `Added persona "${input.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultPersona;
+}
+
+export async function updateAdminPersona(
+  id: string,
+  patch: Partial<Omit<AdminDefaultPersona, 'id' | 'isDeleted'>>,
+): Promise<AdminDefaultPersona> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultPersona.update({ id, ...patch });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'update failed');
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultPersona',
+    recordId: id,
+    summary: `Updated persona "${data.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultPersona;
+}
+
+export async function deleteAdminPersona(id: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultPersona.update({
+    id,
+    isDeleted: true,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'delete failed');
+  await writeAudit({
+    action: 'delete',
+    modelName: 'AdminDefaultPersona',
+    recordId: id,
+    summary: `Removed persona "${data.name}"`,
+    snapshot: data,
+  });
 }
 
 // ============================================================
@@ -232,6 +342,61 @@ export async function listAdminReferenceDocs(): Promise<AdminDefaultReferenceDoc
   return liveAndSorted<AdminDefaultReferenceDoc>(data ?? []);
 }
 
+export async function createAdminReferenceDoc(
+  input: Omit<AdminDefaultReferenceDoc, 'id' | 'isDeleted'>,
+): Promise<AdminDefaultReferenceDoc> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultReferenceDoc.create({
+    ...input,
+    isDeleted: false,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'create failed');
+  await writeAudit({
+    action: 'create',
+    modelName: 'AdminDefaultReferenceDoc',
+    recordId: data.id,
+    summary: `Added reference doc "${input.title}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultReferenceDoc;
+}
+
+export async function updateAdminReferenceDoc(
+  id: string,
+  patch: Partial<Omit<AdminDefaultReferenceDoc, 'id' | 'isDeleted'>>,
+): Promise<AdminDefaultReferenceDoc> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultReferenceDoc.update({ id, ...patch });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'update failed');
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultReferenceDoc',
+    recordId: id,
+    summary: `Updated reference doc "${data.title}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultReferenceDoc;
+}
+
+export async function deleteAdminReferenceDoc(id: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultReferenceDoc.update({
+    id,
+    isDeleted: true,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'delete failed');
+  await writeAudit({
+    action: 'delete',
+    modelName: 'AdminDefaultReferenceDoc',
+    recordId: id,
+    summary: `Removed reference doc "${data.title}"`,
+    snapshot: data,
+  });
+}
+
 // ============================================================
 // Sprints
 // ============================================================
@@ -244,6 +409,61 @@ export async function listAdminSprints(): Promise<AdminDefaultSprint[]> {
   return liveAndSorted<AdminDefaultSprint>(data ?? []);
 }
 
+export async function createAdminSprint(
+  input: Omit<AdminDefaultSprint, 'id' | 'isDeleted'>,
+): Promise<AdminDefaultSprint> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultSprint.create({
+    ...input,
+    isDeleted: false,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'create failed');
+  await writeAudit({
+    action: 'create',
+    modelName: 'AdminDefaultSprint',
+    recordId: data.id,
+    summary: `Added sprint "${input.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultSprint;
+}
+
+export async function updateAdminSprint(
+  id: string,
+  patch: Partial<Omit<AdminDefaultSprint, 'id' | 'isDeleted'>>,
+): Promise<AdminDefaultSprint> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultSprint.update({ id, ...patch });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'update failed');
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultSprint',
+    recordId: id,
+    summary: `Updated sprint "${data.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultSprint;
+}
+
+export async function deleteAdminSprint(id: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultSprint.update({
+    id,
+    isDeleted: true,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'delete failed');
+  await writeAudit({
+    action: 'delete',
+    modelName: 'AdminDefaultSprint',
+    recordId: id,
+    summary: `Removed sprint "${data.name}"`,
+    snapshot: data,
+  });
+}
+
 // ============================================================
 // Boilerplate (key/value)
 // ============================================================
@@ -254,6 +474,68 @@ export async function listAdminBoilerplate(): Promise<AdminDefaultBoilerplate[]>
   const { data, errors } = await c.models.AdminDefaultBoilerplate.list();
   if (errors?.length) throw new Error(errors[0]?.message ?? 'list failed');
   return (data ?? []).filter((r: AdminDefaultBoilerplate) => !r.isDeleted) as AdminDefaultBoilerplate[];
+}
+
+/**
+ * Upsert a boilerplate row by key. If a (non-deleted) row exists with the
+ * key, its value is updated. Otherwise a new row is created. Keys come
+ * from the BOILERPLATE_KEYS constant — admin UI doesn't expose new-key
+ * creation, but the model supports it for future free-form expansion.
+ */
+export async function setBoilerplateValue(
+  key: string,
+  label: string,
+  value: string,
+): Promise<AdminDefaultBoilerplate> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data: rows } = await c.models.AdminDefaultBoilerplate.list();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existing = (rows ?? []).find(
+    (r: AdminDefaultBoilerplate) => r.key === key && !r.isDeleted,
+  );
+  if (existing) {
+    const { data, errors } = await c.models.AdminDefaultBoilerplate.update({
+      id: existing.id,
+      value,
+      label,
+    });
+    if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'update failed');
+    await writeAudit({
+      action: 'update',
+      modelName: 'AdminDefaultBoilerplate',
+      recordId: data.id,
+      summary: `Updated boilerplate "${label}"`,
+      snapshot: data,
+    });
+    return data as AdminDefaultBoilerplate;
+  }
+  const { data, errors } = await c.models.AdminDefaultBoilerplate.create({
+    key,
+    label,
+    value,
+    isDeleted: false,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'create failed');
+  await writeAudit({
+    action: 'create',
+    modelName: 'AdminDefaultBoilerplate',
+    recordId: data.id,
+    summary: `Added boilerplate "${label}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultBoilerplate;
+}
+
+// ============================================================
+// Truncation helper for audit summaries (keeps the activity
+// feed readable when an SE edits a long bullet)
+// ============================================================
+
+function truncate(s: string, n = 60): string {
+  const t = (s ?? '').trim();
+  if (t.length <= n) return t;
+  return t.slice(0, n - 1) + '…';
 }
 
 // ============================================================
@@ -473,42 +755,53 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
     console.warn('bootstrap sprints list failed', err);
   }
 
-  // --- Boilerplate (cadence, timeline summary) ---
-  // Tenant strategy templates are not seeded yet because they take a
-  // customer-name argument; they continue to render via the hardcoded
-  // tenantStrategyDefault() function until the Boilerplate tab introduces
-  // a template-substitution mechanism in Bundle 2.
+  // --- Boilerplate (cadence, timeline summary, tenant strategy templates) ---
+  // Tenant strategy templates use `{{customer}}` as a placeholder; the
+  // resolveTenantStrategyTemplate helper substitutes the actual customer
+  // name at render time. Three rows: customer / plainid / other.
   const DEFAULT_CADENCE =
     'Weekly syncs (PlainID SE + customer POC team) throughout the engagement. Slack / Teams channel established for async Q&A and issue tracking. Two-week use-case sprints: Identify requirements → Build → Test → Review Success Criteria → Update Status.';
   const DEFAULT_TIMELINE_SUMMARY =
     'Scoped for a minimum of 6 weeks to allow sufficient time for environment setup, use-case sprint execution, testing, and knowledge transfer. Structured as 2-week sprints aligned to use-case clusters.';
+  const DEFAULT_TENANT_STRATEGY_CUSTOMER =
+    "The POC will run in {{customer}}'s PlainID tenant. {{customer}} owns and operates the tenant; PlainID does not have direct access. Working sessions in the tenant will be driven by a {{customer}} representative, with PlainID providing real-time guidance and validation.";
+  const DEFAULT_TENANT_STRATEGY_PLAINID =
+    'PlainID will provision a dedicated tenant for the {{customer}} POC engagement. PlainID retains administrative access to support configuration and troubleshooting between sessions. {{customer}} will be granted appropriate roles to participate in policy authoring, testing, and review.';
+  const DEFAULT_TENANT_STRATEGY_OTHER = '';
 
   try {
     const { data: existing } = await c.models.AdminDefaultBoilerplate.list();
     if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
-      try {
-        await c.models.AdminDefaultBoilerplate.create({
-          key: 'cadence',
-          label: 'Cadence & collaboration model',
-          value: DEFAULT_CADENCE,
-          isDeleted: false,
-        });
-        result.boilerplateSeeded++;
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('bootstrap cadence seed failed', err);
-      }
-      try {
-        await c.models.AdminDefaultBoilerplate.create({
-          key: 'timeline.summary',
-          label: 'Timeline summary',
-          value: DEFAULT_TIMELINE_SUMMARY,
-          isDeleted: false,
-        });
-        result.boilerplateSeeded++;
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('bootstrap timeline seed failed', err);
+      const rows = [
+        { key: 'cadence', label: 'Cadence & collaboration model', value: DEFAULT_CADENCE },
+        { key: 'timeline.summary', label: 'Timeline summary', value: DEFAULT_TIMELINE_SUMMARY },
+        {
+          key: 'tenantStrategy.customer',
+          label: 'Tenant strategy — Customer-owned',
+          value: DEFAULT_TENANT_STRATEGY_CUSTOMER,
+        },
+        {
+          key: 'tenantStrategy.plainid',
+          label: 'Tenant strategy — PlainID-owned',
+          value: DEFAULT_TENANT_STRATEGY_PLAINID,
+        },
+        {
+          key: 'tenantStrategy.other',
+          label: 'Tenant strategy — Other',
+          value: DEFAULT_TENANT_STRATEGY_OTHER,
+        },
+      ];
+      for (const row of rows) {
+        try {
+          await c.models.AdminDefaultBoilerplate.create({
+            ...row,
+            isDeleted: false,
+          });
+          result.boilerplateSeeded++;
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('bootstrap boilerplate seed failed for', row.key, err);
+        }
       }
     }
   } catch (err) {
@@ -517,4 +810,112 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
   }
 
   return result;
+}
+
+// ============================================================
+// Reset-to-factory helpers — same pattern as resetTrackerToDefaults.
+// Each soft-deletes all live rows in its category, then re-runs the
+// bootstrap (which sees an empty live set and re-seeds from
+// hardcoded defaults). One summary audit entry per reset.
+// ============================================================
+
+async function softDeleteAllLive(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  collection: any,
+): Promise<number> {
+  const { data: existing } = await collection.list();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const live = ((existing ?? []) as any[]).filter((r) => !r.isDeleted);
+  for (const row of live) {
+    try {
+      await collection.update({ id: row.id, isDeleted: true });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('reset: failed to soft-delete row', row.id, err);
+    }
+  }
+  return live.length;
+}
+
+export async function resetResponsibilitiesToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const removed = await softDeleteAllLive(c.models.AdminDefaultResponsibility);
+  await bootstrapAdminDefaults();
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultResponsibility',
+    recordId: 'reset',
+    summary: `Reset responsibility defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
+  });
+}
+
+export async function resetPersonasToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const removed = await softDeleteAllLive(c.models.AdminDefaultPersona);
+  await bootstrapAdminDefaults();
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultPersona',
+    recordId: 'reset',
+    summary: `Reset persona defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
+  });
+}
+
+export async function resetReferenceDocsToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const removed = await softDeleteAllLive(c.models.AdminDefaultReferenceDoc);
+  await bootstrapAdminDefaults();
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultReferenceDoc',
+    recordId: 'reset',
+    summary: `Reset reference doc defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
+  });
+}
+
+export async function resetSprintsToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const removed = await softDeleteAllLive(c.models.AdminDefaultSprint);
+  await bootstrapAdminDefaults();
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultSprint',
+    recordId: 'reset',
+    summary: `Reset sprint defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
+  });
+}
+
+export async function resetBoilerplateToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const removed = await softDeleteAllLive(c.models.AdminDefaultBoilerplate);
+  await bootstrapAdminDefaults();
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultBoilerplate',
+    recordId: 'reset',
+    summary: `Reset boilerplate defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
+  });
+}
+
+/**
+ * Look up a boilerplate template by key and substitute {{customer}} with
+ * the supplied customer name. Falls back to the hardcoded value when the
+ * admin row is missing (e.g. before bootstrap has run).
+ */
+export function resolveTenantStrategyTemplate(
+  boilerplate: AdminDefaultBoilerplate[],
+  choice: 'customer' | 'plainid' | 'other' | '',
+  customerName: string,
+): string {
+  if (!choice) return '';
+  const key = `tenantStrategy.${choice}`;
+  const row = boilerplate.find((r) => r.key === key);
+  const tpl = row?.value ?? '';
+  const customer = customerName.trim() || 'the customer';
+  return tpl.replace(/\{\{customer\}\}/g, customer);
 }

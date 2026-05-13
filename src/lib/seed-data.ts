@@ -403,11 +403,29 @@ export const DEFAULT_REFERENCE_DOCS: Omit<ReferenceDoc, 'id'>[] = [
 
 export type TenantStrategyChoice = 'customer' | 'plainid' | 'other' | '';
 
+/**
+ * Build the default tenant-strategy paragraph for the given choice.
+ *
+ * If an admin templates map is supplied (key→template), the function uses
+ * that template, substituting `{{customer}}` placeholders. Otherwise it
+ * falls back to the hardcoded text below — which preserves behavior for
+ * any code path that hasn't been threaded through the defaults context.
+ *
+ * The admin-aware path is normally driven from Sections.tsx, which has
+ * access to DefaultsContext and passes `boilerplate` from there.
+ */
 export function tenantStrategyDefault(
   choice: TenantStrategyChoice,
   customerName: string,
+  templates?: Partial<Record<'customer' | 'plainid' | 'other', string>>,
 ): string {
   const customer = customerName.trim() || 'the customer';
+  // Admin-driven template lookup first
+  if (choice && templates && typeof templates[choice as 'customer' | 'plainid' | 'other'] === 'string') {
+    const tpl = templates[choice as 'customer' | 'plainid' | 'other'] ?? '';
+    return tpl.replace(/\{\{customer\}\}/g, customer);
+  }
+  // Hardcoded fallback
   switch (choice) {
     case 'customer':
       return `The POC will run in ${customer}'s PlainID tenant. ${customer} owns and operates the tenant; PlainID does not have direct access. Working sessions in the tenant will be driven by a ${customer} representative, with PlainID providing real-time guidance and validation.`;
@@ -421,19 +439,34 @@ export function tenantStrategyDefault(
 }
 
 /**
- * Build a fresh empty POC. When `catalogs` is provided (the live admin
- * defaults from DefaultsContext), tracker / personas / sprints / refDocs
- * come from there; otherwise the hardcoded seeds in this file are used.
- *
- * Currently only `tracker` is wired through (admin Bundle 1). The other
- * catalogs still seed from constants here until their admin tabs ship.
+ * Build a fresh empty POC. The optional `catalogs` argument carries
+ * admin-curated defaults (loaded from DefaultsContext). Each field
+ * falls back to its hardcoded seed value when the catalog override is
+ * not provided — preserving day-1 behavior before any admin tables have
+ * been bootstrapped.
  */
 export function emptyPoc(
   ownerEmail: string,
   catalogs?: {
     tracker?: TrackerRow[];
+    sprints?: Sprint[];
+    personas?: Persona[];
+    referenceDocs?: ReferenceDoc[];
+    customerResponsibilities?: string;
+    plainidResponsibilities?: string;
+    cadence?: string;
+    timelineSummary?: string;
   },
 ): PocDocument {
+  const DEFAULT_CADENCE =
+    'Weekly syncs (PlainID SE + customer POC team) throughout the engagement. Slack / Teams channel established for async Q&A and issue tracking. Two-week use-case sprints: Identify requirements → Build → Test → Review Success Criteria → Update Status.';
+  const DEFAULT_TIMELINE_SUMMARY =
+    'Scoped for a minimum of 6 weeks to allow sufficient time for environment setup, use-case sprint execution, testing, and knowledge transfer. Structured as 2-week sprints aligned to use-case clusters.';
+  const DEFAULT_CUSTOMER_RESPONSIBILITIES =
+    'Provision Kubernetes cluster (or namespace) for PlainID component deployment\nProvide network connectivity to data sources, identity stores, and downstream systems\nIdentify a network/infrastructure contact for connectivity setup and troubleshooting\nProvision test user accounts representing each persona, with documented attribute values\nProvide sample JWTs / token introspection for the primary IdP\nGrant POC team access to the customer POC environment\nReview success criteria with stakeholders prior to kickoff';
+  const DEFAULT_PLAINID_RESPONSIBILITIES =
+    'Provision PlainID SaaS tenant (PAP) scoped for the POC\nProvide Helm charts and deployment documentation for PDP/PAA components\nLead authorizer configuration, integration testing, and policy authoring\nDeliver weekly status reports against use case success criteria\nProvide Solutions Engineering support throughout the engagement\nDocument findings, gaps, and post-POC recommendations';
+
   return {
     customerName: '',
     ownerEmail,
@@ -453,20 +486,18 @@ export function emptyPoc(
     identitySources: [],
     architectureConstraints: '',
     outOfScope: '',
-    timelineSummary:
-      'Scoped for a minimum of 6 weeks to allow sufficient time for environment setup, use-case sprint execution, testing, and knowledge transfer. Structured as 2-week sprints aligned to use-case clusters.',
-    sprints: DEFAULT_SPRINTS.map((s) => ({ ...s, id: uid() })),
-    cadence:
-      'Weekly syncs (PlainID SE + customer POC team) throughout the engagement. Slack / Teams channel established for async Q&A and issue tracking. Two-week use-case sprints: Identify requirements → Build → Test → Review Success Criteria → Update Status.',
-    personas: DEFAULT_PERSONAS.map((p) => ({ ...p, id: uid() })),
+    timelineSummary: catalogs?.timelineSummary ?? DEFAULT_TIMELINE_SUMMARY,
+    sprints: catalogs?.sprints ?? DEFAULT_SPRINTS.map((s) => ({ ...s, id: uid() })),
+    cadence: catalogs?.cadence ?? DEFAULT_CADENCE,
+    personas: catalogs?.personas ?? DEFAULT_PERSONAS.map((p) => ({ ...p, id: uid() })),
     teamMembers: [],
     useCases: [],
     customerResponsibilities:
-      'Provision Kubernetes cluster (or namespace) for PlainID component deployment\nProvide network connectivity to data sources, identity stores, and downstream systems\nIdentify a network/infrastructure contact for connectivity setup and troubleshooting\nProvision test user accounts representing each persona, with documented attribute values\nProvide sample JWTs / token introspection for the primary IdP\nGrant POC team access to the customer POC environment\nReview success criteria with stakeholders prior to kickoff',
+      catalogs?.customerResponsibilities ?? DEFAULT_CUSTOMER_RESPONSIBILITIES,
     plainidResponsibilities:
-      'Provision PlainID SaaS tenant (PAP) scoped for the POC\nProvide Helm charts and deployment documentation for PDP/PAA components\nLead authorizer configuration, integration testing, and policy authoring\nDeliver weekly status reports against use case success criteria\nProvide Solutions Engineering support throughout the engagement\nDocument findings, gaps, and post-POC recommendations',
+      catalogs?.plainidResponsibilities ?? DEFAULT_PLAINID_RESPONSIBILITIES,
     openItems: '',
     tracker: catalogs?.tracker ?? DEFAULT_TRACKER.map((t) => ({ ...t, id: uid() })),
-    referenceDocs: DEFAULT_REFERENCE_DOCS.map((d) => ({ ...d, id: uid() })),
+    referenceDocs: catalogs?.referenceDocs ?? DEFAULT_REFERENCE_DOCS.map((d) => ({ ...d, id: uid() })),
   };
 }

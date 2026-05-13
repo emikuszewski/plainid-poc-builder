@@ -7,9 +7,35 @@ import {
   updateTrackerTask,
   deleteTrackerTask,
   resetTrackerToDefaults,
+  createResponsibility,
+  updateResponsibility,
+  deleteResponsibility,
+  resetResponsibilitiesToDefaults,
+  createAdminPersona,
+  updateAdminPersona,
+  deleteAdminPersona,
+  resetPersonasToDefaults,
+  createAdminReferenceDoc,
+  updateAdminReferenceDoc,
+  deleteAdminReferenceDoc,
+  resetReferenceDocsToDefaults,
+  createAdminSprint,
+  updateAdminSprint,
+  deleteAdminSprint,
+  resetSprintsToDefaults,
+  setBoilerplateValue,
+  resetBoilerplateToDefaults,
   listAuditLog,
 } from '../lib/admin-defaults';
-import type { AdminDefaultTrackerTask, AdminAuditLogEntry } from '../types';
+import type {
+  AdminDefaultTrackerTask,
+  AdminDefaultResponsibility,
+  AdminDefaultPersona,
+  AdminDefaultReferenceDoc,
+  AdminDefaultSprint,
+  AdminDefaultBoilerplate,
+  AdminAuditLogEntry,
+} from '../types';
 
 /**
  * Admin page — shared catalogs the team curates together.
@@ -77,11 +103,11 @@ export function AdminPage() {
 
       {activeTab === 'activity' && <ActivityTab />}
       {activeTab === 'tracker' && <TrackerTab />}
-      {activeTab === 'responsibilities' && <ComingSoon label="Responsibilities" />}
-      {activeTab === 'personas' && <ComingSoon label="Personas" />}
-      {activeTab === 'docs' && <ComingSoon label="Reference Docs" />}
-      {activeTab === 'sprints' && <ComingSoon label="Sprints" />}
-      {activeTab === 'boilerplate' && <ComingSoon label="Boilerplate" />}
+      {activeTab === 'responsibilities' && <ResponsibilitiesTab />}
+      {activeTab === 'personas' && <PersonasTab />}
+      {activeTab === 'docs' && <ReferenceDocsTab />}
+      {activeTab === 'sprints' && <SprintsTab />}
+      {activeTab === 'boilerplate' && <BoilerplateTab />}
     </div>
   );
 }
@@ -487,17 +513,1039 @@ function TrackerRow({
 }
 
 // ============================================================
-// Placeholder for tabs not yet implemented in Bundle 1
+// Responsibilities tab — edit customer + plainid bullet lists
 // ============================================================
 
-function ComingSoon({ label }: { label: string }) {
+function ResponsibilitiesTab() {
+  const { responsibilities, refresh, loaded } = useDefaults();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const customers = responsibilities.filter((r) => r.kind === 'customer');
+  const plainids = responsibilities.filter((r) => r.kind === 'plainid');
+
+  const handleCreate = async (kind: 'customer' | 'plainid') => {
+    setBusy(true);
+    setError(null);
+    try {
+      const rowsOfKind = responsibilities.filter((r) => r.kind === kind);
+      const maxOrder = rowsOfKind.length
+        ? Math.max(...rowsOfKind.map((r) => r.sortOrder ?? 0))
+        : 0;
+      const created = await createResponsibility({
+        kind,
+        text: 'New responsibility',
+        sortOrder: maxOrder + 10,
+      });
+      await refresh('responsibilities');
+      setEditingId(created.id);
+    } catch (err: any) {
+      setError(err?.message ?? 'Create failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdate = async (
+    id: string,
+    patch: Partial<Omit<AdminDefaultResponsibility, 'id' | 'isDeleted'>>,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateResponsibility(id, patch);
+      await refresh('responsibilities');
+    } catch (err: any) {
+      setError(err?.message ?? 'Update failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id: string, text: string) => {
+    if (!confirm(`Remove "${text}"?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteResponsibility(id);
+      await refresh('responsibilities');
+    } catch (err: any) {
+      setError(err?.message ?? 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (
+      !confirm(
+        'Reset responsibility defaults to the factory list?\n\n' +
+          'All current rows will be soft-deleted and replaced with the ' +
+          'original seed values. Existing POCs are unaffected.',
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await resetResponsibilitiesToDefaults();
+      await refresh('responsibilities');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!loaded) return <div className="text-[12.5px] text-[var(--color-text-muted)]">Loading…</div>;
+
   return (
-    <div className="border border-dashed border-[var(--color-border)] rounded-lg px-6 py-14 text-center">
-      <div className="text-[13px] font-medium">{label} — coming soon</div>
-      <div className="text-[12px] text-[var(--color-text-muted)] mt-1 max-w-md mx-auto">
-        Schema is deployed and the rest of the wiring is ready. The editor UI for this
-        tab ships in the next bundle.
+    <div className="space-y-6">
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {customers.length} customer row{customers.length === 1 ? '' : 's'},{' '}
+          {plainids.length} PlainID row{plainids.length === 1 ? '' : 's'}. New POCs seed each
+          side as a newline-joined bullet list.
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
+      </div>
+
+      {error && (
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      {(['customer', 'plainid'] as const).map((kind) => {
+        const rows = kind === 'customer' ? customers : plainids;
+        return (
+          <section key={kind} className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+            <header className="flex items-center px-4 py-2 bg-[var(--color-bg-elevated)] border-b border-[var(--color-border)]">
+              <span className="text-[13px] font-medium">
+                {kind === 'customer' ? 'Customer responsibilities' : 'PlainID responsibilities'}
+              </span>
+              <span className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] ml-2">
+                {rows.length} ROW{rows.length === 1 ? '' : 'S'}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void handleCreate(kind)}
+                disabled={busy}
+                className="ml-auto"
+              >
+                + Row
+              </Button>
+            </header>
+            <div className="divide-y divide-[var(--color-border)]">
+              {rows.map((row) => (
+                <ResponsibilityRow
+                  key={row.id}
+                  row={row}
+                  editing={editingId === row.id}
+                  busy={busy}
+                  onStartEdit={() => setEditingId(row.id)}
+                  onCancelEdit={() => setEditingId(null)}
+                  onSave={async (patch) => {
+                    await handleUpdate(row.id, patch);
+                    setEditingId(null);
+                  }}
+                  onDelete={() => void handleDelete(row.id, row.text)}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function ResponsibilityRow({
+  row,
+  editing,
+  busy,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}: {
+  row: AdminDefaultResponsibility;
+  editing: boolean;
+  busy: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: (patch: Partial<Omit<AdminDefaultResponsibility, 'id' | 'isDeleted'>>) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [text, setText] = useState(row.text);
+  useEffect(() => {
+    if (!editing) setText(row.text);
+  }, [row, editing]);
+
+  if (editing) {
+    return (
+      <div className="px-4 py-3 bg-[var(--color-bg)]">
+        <textarea
+          rows={3}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          autoFocus
+          placeholder="Responsibility text"
+        />
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => void onSave({ text: text.trim() })}
+            disabled={busy || !text.trim()}
+          >
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onCancelEdit} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto text-[var(--color-danger)]"
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="px-4 py-2 hover:bg-[var(--color-bg-hover)] cursor-pointer text-[12.5px] leading-relaxed"
+      onClick={onStartEdit}
+      role="button"
+    >
+      {row.text}
+    </div>
+  );
+}
+
+// ============================================================
+// Personas tab
+// ============================================================
+
+function PersonasTab() {
+  const { personas, refresh, loaded } = useDefaults();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleCreate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const maxOrder = personas.length ? Math.max(...personas.map((p) => p.sortOrder ?? 0)) : 0;
+      const created = await createAdminPersona({
+        name: 'New persona',
+        description: '',
+        sortOrder: maxOrder + 10,
+      });
+      await refresh('personas');
+      setEditingId(created.id);
+    } catch (err: any) {
+      setError(err?.message ?? 'Create failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdate = async (
+    id: string,
+    patch: Partial<Omit<AdminDefaultPersona, 'id' | 'isDeleted'>>,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateAdminPersona(id, patch);
+      await refresh('personas');
+    } catch (err: any) {
+      setError(err?.message ?? 'Update failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove persona "${name}"?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAdminPersona(id);
+      await refresh('personas');
+    } catch (err: any) {
+      setError(err?.message ?? 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Reset persona defaults to the factory list?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await resetPersonasToDefaults();
+      await refresh('personas');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!loaded) return <div className="text-[12.5px] text-[var(--color-text-muted)]">Loading…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {personas.length} persona{personas.length === 1 ? '' : 's'}. SEs typically map each to a
+          concrete user / role / attribute set on a per-POC basis.
+        </div>
+        <Button size="sm" onClick={() => void handleCreate()} disabled={busy}>
+          + Persona
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
+      </div>
+
+      {error && (
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden divide-y divide-[var(--color-border)]">
+        {personas.map((row) => (
+          <PersonaRow
+            key={row.id}
+            row={row}
+            editing={editingId === row.id}
+            busy={busy}
+            onStartEdit={() => setEditingId(row.id)}
+            onCancelEdit={() => setEditingId(null)}
+            onSave={async (patch) => {
+              await handleUpdate(row.id, patch);
+              setEditingId(null);
+            }}
+            onDelete={() => void handleDelete(row.id, row.name)}
+          />
+        ))}
       </div>
     </div>
+  );
+}
+
+function PersonaRow({
+  row,
+  editing,
+  busy,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}: {
+  row: AdminDefaultPersona;
+  editing: boolean;
+  busy: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: (patch: Partial<Omit<AdminDefaultPersona, 'id' | 'isDeleted'>>) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(row.name);
+  const [description, setDescription] = useState(row.description ?? '');
+  useEffect(() => {
+    if (!editing) {
+      setName(row.name);
+      setDescription(row.description ?? '');
+    }
+  }, [row, editing]);
+
+  if (editing) {
+    return (
+      <div className="px-4 py-3 bg-[var(--color-bg)]">
+        <div className="grid grid-cols-12 gap-2">
+          <div className="col-span-4">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </div>
+          <div className="col-span-8">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Description</label>
+            <input value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => void onSave({ name: name.trim(), description: description.trim() })}
+            disabled={busy || !name.trim()}
+          >
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onCancelEdit} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto text-[var(--color-danger)]"
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex items-baseline gap-3 px-4 py-2 hover:bg-[var(--color-bg-hover)] cursor-pointer"
+      onClick={onStartEdit}
+      role="button"
+    >
+      <span className="text-[12.5px] font-medium">{row.name}</span>
+      {row.description && (
+        <span className="text-[11.5px] text-[var(--color-text-muted)] truncate">
+          — {row.description}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Reference Docs tab
+// ============================================================
+
+function ReferenceDocsTab() {
+  const { referenceDocs, refresh, loaded } = useDefaults();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleCreate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const maxOrder = referenceDocs.length
+        ? Math.max(...referenceDocs.map((d) => d.sortOrder ?? 0))
+        : 0;
+      const created = await createAdminReferenceDoc({
+        title: 'New reference doc',
+        url: 'https://',
+        description: '',
+        sortOrder: maxOrder + 10,
+      });
+      await refresh('referenceDocs');
+      setEditingId(created.id);
+    } catch (err: any) {
+      setError(err?.message ?? 'Create failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdate = async (
+    id: string,
+    patch: Partial<Omit<AdminDefaultReferenceDoc, 'id' | 'isDeleted'>>,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateAdminReferenceDoc(id, patch);
+      await refresh('referenceDocs');
+    } catch (err: any) {
+      setError(err?.message ?? 'Update failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id: string, title: string) => {
+    if (!confirm(`Remove "${title}"?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAdminReferenceDoc(id);
+      await refresh('referenceDocs');
+    } catch (err: any) {
+      setError(err?.message ?? 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Reset reference doc defaults to the factory list?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await resetReferenceDocsToDefaults();
+      await refresh('referenceDocs');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!loaded) return <div className="text-[12.5px] text-[var(--color-text-muted)]">Loading…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {referenceDocs.length} doc{referenceDocs.length === 1 ? '' : 's'}. Public PlainID docs
+          to share with the customer; SEs add or remove on a per-POC basis.
+        </div>
+        <Button size="sm" onClick={() => void handleCreate()} disabled={busy}>
+          + Doc
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
+      </div>
+
+      {error && (
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden divide-y divide-[var(--color-border)]">
+        {referenceDocs.map((row) => (
+          <ReferenceDocRow
+            key={row.id}
+            row={row}
+            editing={editingId === row.id}
+            busy={busy}
+            onStartEdit={() => setEditingId(row.id)}
+            onCancelEdit={() => setEditingId(null)}
+            onSave={async (patch) => {
+              await handleUpdate(row.id, patch);
+              setEditingId(null);
+            }}
+            onDelete={() => void handleDelete(row.id, row.title)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReferenceDocRow({
+  row,
+  editing,
+  busy,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}: {
+  row: AdminDefaultReferenceDoc;
+  editing: boolean;
+  busy: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: (patch: Partial<Omit<AdminDefaultReferenceDoc, 'id' | 'isDeleted'>>) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [title, setTitle] = useState(row.title);
+  const [url, setUrl] = useState(row.url);
+  const [description, setDescription] = useState(row.description ?? '');
+  useEffect(() => {
+    if (!editing) {
+      setTitle(row.title);
+      setUrl(row.url);
+      setDescription(row.description ?? '');
+    }
+  }, [row, editing]);
+
+  if (editing) {
+    return (
+      <div className="px-4 py-3 bg-[var(--color-bg)]">
+        <div className="grid grid-cols-12 gap-2">
+          <div className="col-span-12">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Title</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+          </div>
+          <div className="col-span-12">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">URL</label>
+            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" />
+          </div>
+          <div className="col-span-12">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Description</label>
+            <input value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() =>
+              void onSave({
+                title: title.trim(),
+                url: url.trim(),
+                description: description.trim(),
+              })
+            }
+            disabled={busy || !title.trim() || !url.trim()}
+          >
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onCancelEdit} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto text-[var(--color-danger)]"
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-col px-4 py-2 hover:bg-[var(--color-bg-hover)] cursor-pointer"
+      onClick={onStartEdit}
+      role="button"
+    >
+      <div className="text-[12.5px] font-medium">{row.title}</div>
+      <div className="text-[11px] mono text-[var(--color-text-dim)] truncate">{row.url}</div>
+      {row.description && (
+        <div className="text-[11.5px] text-[var(--color-text-muted)] truncate">
+          {row.description}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Sprints tab
+// ============================================================
+
+function SprintsTab() {
+  const { sprints, refresh, loaded } = useDefaults();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleCreate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const maxOrder = sprints.length ? Math.max(...sprints.map((s) => s.sortOrder ?? 0)) : 0;
+      const created = await createAdminSprint({
+        name: `Sprint ${sprints.length}`,
+        weeks: '',
+        focus: '',
+        deliverables: '',
+        sortOrder: maxOrder + 10,
+      });
+      await refresh('sprints');
+      setEditingId(created.id);
+    } catch (err: any) {
+      setError(err?.message ?? 'Create failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdate = async (
+    id: string,
+    patch: Partial<Omit<AdminDefaultSprint, 'id' | 'isDeleted'>>,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateAdminSprint(id, patch);
+      await refresh('sprints');
+    } catch (err: any) {
+      setError(err?.message ?? 'Update failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove sprint "${name}"?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAdminSprint(id);
+      await refresh('sprints');
+    } catch (err: any) {
+      setError(err?.message ?? 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Reset sprint defaults to the factory list?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await resetSprintsToDefaults();
+      await refresh('sprints');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!loaded) return <div className="text-[12.5px] text-[var(--color-text-muted)]">Loading…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {sprints.length} sprint{sprints.length === 1 ? '' : 's'}. The Timeline section of each
+          POC reads from these. `deliverables` is captured but not yet projected onto the
+          per-POC Sprint shape — wiring lands in a future update.
+        </div>
+        <Button size="sm" onClick={() => void handleCreate()} disabled={busy}>
+          + Sprint
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
+      </div>
+
+      {error && (
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden divide-y divide-[var(--color-border)]">
+        {sprints.map((row) => (
+          <SprintRow
+            key={row.id}
+            row={row}
+            editing={editingId === row.id}
+            busy={busy}
+            onStartEdit={() => setEditingId(row.id)}
+            onCancelEdit={() => setEditingId(null)}
+            onSave={async (patch) => {
+              await handleUpdate(row.id, patch);
+              setEditingId(null);
+            }}
+            onDelete={() => void handleDelete(row.id, row.name)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SprintRow({
+  row,
+  editing,
+  busy,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}: {
+  row: AdminDefaultSprint;
+  editing: boolean;
+  busy: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: (patch: Partial<Omit<AdminDefaultSprint, 'id' | 'isDeleted'>>) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(row.name);
+  const [weeks, setWeeks] = useState(row.weeks ?? '');
+  const [focus, setFocus] = useState(row.focus ?? '');
+  const [deliverables, setDeliverables] = useState(row.deliverables ?? '');
+  useEffect(() => {
+    if (!editing) {
+      setName(row.name);
+      setWeeks(row.weeks ?? '');
+      setFocus(row.focus ?? '');
+      setDeliverables(row.deliverables ?? '');
+    }
+  }, [row, editing]);
+
+  if (editing) {
+    return (
+      <div className="px-4 py-3 bg-[var(--color-bg)]">
+        <div className="grid grid-cols-12 gap-2">
+          <div className="col-span-6">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </div>
+          <div className="col-span-6">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Weeks</label>
+            <input value={weeks} onChange={(e) => setWeeks(e.target.value)} placeholder="e.g. Weeks 1-2" />
+          </div>
+          <div className="col-span-12">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Focus</label>
+            <input value={focus} onChange={(e) => setFocus(e.target.value)} />
+          </div>
+          <div className="col-span-12">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">
+              Deliverables (one per line)
+            </label>
+            <textarea
+              rows={3}
+              value={deliverables}
+              onChange={(e) => setDeliverables(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() =>
+              void onSave({
+                name: name.trim(),
+                weeks: weeks.trim(),
+                focus: focus.trim(),
+                deliverables: deliverables.trim(),
+              })
+            }
+            disabled={busy || !name.trim()}
+          >
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onCancelEdit} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto text-[var(--color-danger)]"
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-col px-4 py-2 hover:bg-[var(--color-bg-hover)] cursor-pointer"
+      onClick={onStartEdit}
+      role="button"
+    >
+      <div className="flex items-baseline gap-2">
+        <span className="text-[12.5px] font-medium">{row.name}</span>
+        {row.weeks && (
+          <span className="mono text-[10.5px] tracking-wider text-[var(--color-text-dim)]">
+            {row.weeks}
+          </span>
+        )}
+      </div>
+      {row.focus && (
+        <span className="text-[11.5px] text-[var(--color-text-muted)] truncate">{row.focus}</span>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Boilerplate tab — edit known keys (cadence, timeline summary,
+// tenant strategy templates). UI is a per-key card with a textarea.
+// ============================================================
+
+const KNOWN_BOILERPLATE_KEYS: { key: string; label: string; hint?: string; rows?: number }[] = [
+  {
+    key: 'cadence',
+    label: 'Cadence & collaboration model',
+    hint: 'Default text for the Framework section\'s cadence field.',
+    rows: 4,
+  },
+  {
+    key: 'timeline.summary',
+    label: 'Timeline summary',
+    hint: 'Default text for the Timeline section\'s summary field.',
+    rows: 3,
+  },
+  {
+    key: 'tenantStrategy.customer',
+    label: 'Tenant strategy — Customer-owned',
+    hint: 'Inserted into Discovery when the SE picks "Customer-owned". Use {{customer}} as a placeholder for the customer name.',
+    rows: 5,
+  },
+  {
+    key: 'tenantStrategy.plainid',
+    label: 'Tenant strategy — PlainID-owned',
+    hint: 'Inserted into Discovery when the SE picks "PlainID-owned". Use {{customer}} as a placeholder for the customer name.',
+    rows: 5,
+  },
+  {
+    key: 'tenantStrategy.other',
+    label: 'Tenant strategy — Other',
+    hint: 'Inserted into Discovery when the SE picks "Other". Typically blank — the SE writes a custom paragraph.',
+    rows: 3,
+  },
+];
+
+function BoilerplateTab() {
+  const { boilerplate, refresh, loaded } = useDefaults();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleSave = async (key: string, label: string, value: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await setBoilerplateValue(key, label, value);
+      await refresh('boilerplate');
+    } catch (err: any) {
+      setError(err?.message ?? 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Reset all boilerplate templates to factory defaults?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await resetBoilerplateToDefaults();
+      await refresh('boilerplate');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!loaded) return <div className="text-[12.5px] text-[var(--color-text-muted)]">Loading…</div>;
+
+  const byKey = new Map<string, AdminDefaultBoilerplate>();
+  for (const r of boilerplate) byKey.set(r.key, r);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {KNOWN_BOILERPLATE_KEYS.length} known templates. Edit a value, click Save. Tenant
+          strategy templates support a <code className="mono text-[11px]">{'{{customer}}'}</code> placeholder that
+          substitutes the POC's customer name at render time.
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
+      </div>
+
+      {error && (
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {KNOWN_BOILERPLATE_KEYS.map((entry) => {
+          const row = byKey.get(entry.key);
+          return (
+            <BoilerplateEditor
+              key={entry.key}
+              label={entry.label}
+              hint={entry.hint}
+              rows={entry.rows ?? 4}
+              initialValue={row?.value ?? ''}
+              busy={busy}
+              onSave={(v) => handleSave(entry.key, entry.label, v)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BoilerplateEditor({
+  label,
+  hint,
+  rows,
+  initialValue,
+  busy,
+  onSave,
+}: {
+  label: string;
+  hint?: string;
+  rows: number;
+  initialValue: string;
+  busy: boolean;
+  onSave: (value: string) => Promise<void> | void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const [savedValue, setSavedValue] = useState(initialValue);
+  useEffect(() => {
+    setValue(initialValue);
+    setSavedValue(initialValue);
+  }, [initialValue]);
+  const dirty = value !== savedValue;
+
+  return (
+    <section className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+      <header className="px-4 py-2 bg-[var(--color-bg-elevated)] border-b border-[var(--color-border)]">
+        <div className="text-[12.5px] font-medium">{label}</div>
+        {hint && <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{hint}</div>}
+      </header>
+      <div className="px-4 py-3 bg-[var(--color-bg)]">
+        <textarea rows={rows} value={value} onChange={(e) => setValue(e.target.value)} />
+        <div className="flex items-center gap-2 mt-2">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={async () => {
+              await onSave(value);
+              setSavedValue(value);
+            }}
+            disabled={busy || !dirty}
+          >
+            Save
+          </Button>
+          {dirty && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setValue(savedValue)}
+              disabled={busy}
+            >
+              Discard
+            </Button>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
