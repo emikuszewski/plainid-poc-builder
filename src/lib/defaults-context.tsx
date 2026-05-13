@@ -6,6 +6,7 @@ import {
   listAdminReferenceDocs,
   listAdminSprints,
   listAdminBoilerplate,
+  bootstrapAdminDefaults,
 } from './admin-defaults';
 import {
   DEFAULT_TRACKER,
@@ -120,7 +121,26 @@ export function DefaultsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    // On mount: run bootstrap first (idempotent — no-op once tables have
+    // data), then refresh all catalogs from the database. This sequence
+    // ensures the very first time the app boots after the admin feature
+    // ships, the user sees their team's defaults populated rather than
+    // an empty admin console.
+    let cancelled = false;
+    (async () => {
+      try {
+        await bootstrapAdminDefaults();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('Admin defaults bootstrap failed', err);
+      }
+      if (!cancelled) {
+        await refresh();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   return (
