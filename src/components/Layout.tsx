@@ -11,7 +11,8 @@ export function Layout({ user, children }: { user: { email: string }; children: 
 
   const navLinks = [
     { to: '/', label: 'POCs' },
-    { to: '/library', label: 'Templates' },
+    { to: '/library', label: 'Use Case Library' },
+    { to: '/admin', label: 'Admin' },
   ];
 
   const isActive = (to: string) =>
@@ -29,7 +30,11 @@ export function Layout({ user, children }: { user: { email: string }; children: 
                 fill="var(--color-accent)"
               />
             </svg>
-            <span className="font-semibold text-[13px] tracking-tight">Pocket</span>
+            <span className="font-semibold text-[13px] tracking-tight">
+              PlainID
+              <span className="text-[var(--color-text-dim)] font-normal mx-1.5">/</span>
+              <span className="text-[var(--color-text-muted)] font-normal">POC Builder</span>
+            </span>
           </Link>
 
           <nav className="flex items-center gap-1">

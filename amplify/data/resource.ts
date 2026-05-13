@@ -205,6 +205,112 @@ const schema = a
       .returns(a.string()) // returns the new AiJob id
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(aiGenerate)),
+
+    /**
+     * Admin defaults — six shared catalogs the team curates together.
+     *
+     * When an SE creates a new POC, the seed values come from these models
+     * instead of the hardcoded constants in seed-data.ts. The hardcoded
+     * constants stay as fallback so the app keeps working when these tables
+     * are empty (e.g. first-run before anyone has populated them).
+     *
+     * Deletion is soft (isDeleted=true) — existing POCs that snapshotted a
+     * value at creation time aren't affected, and the audit log retains a
+     * record of what changed.
+     *
+     * Authorization mirrors UseCaseLibraryEntry: any signed-in team member
+     * can create / read / update / delete. Every write also produces an
+     * AdminAuditLog row (written by the client at write time).
+     */
+    AdminDefaultTrackerTask: a
+      .model({
+        phase: a.string().required(),
+        task: a.string().required(),
+        responsible: a.string(), // e.g. "PlainID", "Customer", "Customer + PlainID"
+        defaultStatus: a.string(), // "Not Started" | "In Progress" | "Completed" | "Blocked"
+        sortOrder: a.integer().required(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    AdminDefaultResponsibility: a
+      .model({
+        kind: a.string().required(), // 'customer' | 'plainid'
+        text: a.string().required(),
+        sortOrder: a.integer().required(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    AdminDefaultPersona: a
+      .model({
+        name: a.string().required(),
+        description: a.string(),
+        sortOrder: a.integer().required(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    AdminDefaultReferenceDoc: a
+      .model({
+        title: a.string().required(),
+        url: a.string().required(),
+        description: a.string(),
+        sortOrder: a.integer().required(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    AdminDefaultSprint: a
+      .model({
+        name: a.string().required(), // e.g. "Sprint 1 — Foundation"
+        weeks: a.string(), // e.g. "Weeks 1-2"
+        focus: a.string(),
+        deliverables: a.string(), // newline-separated
+        sortOrder: a.integer().required(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    /**
+     * Free-form boilerplate strings keyed by name. Holds things like
+     * default cadence text, default tenant-strategy paragraphs (one per
+     * choice: customer / plainid / other), default timeline summary, etc.
+     * Using a key/value table avoids a schema change every time we add
+     * a new piece of seedable copy.
+     */
+    AdminDefaultBoilerplate: a
+      .model({
+        key: a.string().required(), // 'cadence' | 'tenantStrategy.customer' | etc.
+        label: a.string().required(), // human-readable label for admin UI
+        value: a.string(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    /**
+     * Append-only audit log for all admin-defaults writes. Every create /
+     * update / delete on an Admin* model writes one row here. Powers the
+     * Admin → Activity tab. Authorization is broad (anyone can read +
+     * create) because the whole team needs visibility.
+     */
+    AdminAuditLog: a
+      .model({
+        userEmail: a.string().required(),
+        action: a.string().required(), // 'create' | 'update' | 'delete'
+        modelName: a.string().required(), // e.g. 'AdminDefaultTrackerTask'
+        recordId: a.string().required(),
+        // Short human-readable description for the activity feed, e.g.
+        // 'Updated tracker task "Identify data domains"' or
+        // 'Deleted persona "Data Steward"'.
+        summary: a.string().required(),
+        // JSON snapshot of the record after the change (full row for
+        // create/update; the soft-deleted row for delete). Stored as a
+        // string so we don't need a per-model union type.
+        snapshotJson: a.string(),
+        timestamp: a.string().required(), // ISO
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read'])]),
   })
   .authorization((allow) => [allow.resource(aiGenerate)]);
 

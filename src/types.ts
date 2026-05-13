@@ -1104,3 +1104,84 @@ export const PLAINID_TEAM_CATALOG: PlainIdTeamCatalogEntry[] = [
 export function findPlainIdTeamEntry(id: string): PlainIdTeamCatalogEntry | undefined {
   return PLAINID_TEAM_CATALOG.find((e) => e.id === id);
 }
+
+// ============================================================
+// Admin defaults — types matching the Amplify schema. These are
+// also the shape returned by the DefaultsContext on the frontend.
+// All fields are stored as strings/numbers (avoiding json columns
+// so the admin UI can edit each value directly).
+// ============================================================
+
+export interface AdminDefaultTrackerTask {
+  id: string;
+  phase: string;
+  task: string;
+  responsible?: string | null;
+  defaultStatus?: string | null;
+  sortOrder: number;
+  isDeleted?: boolean | null;
+}
+
+export interface AdminDefaultResponsibility {
+  id: string;
+  kind: 'customer' | 'plainid';
+  text: string;
+  sortOrder: number;
+  isDeleted?: boolean | null;
+}
+
+export interface AdminDefaultPersona {
+  id: string;
+  name: string;
+  description?: string | null;
+  sortOrder: number;
+  isDeleted?: boolean | null;
+}
+
+export interface AdminDefaultReferenceDoc {
+  id: string;
+  title: string;
+  url: string;
+  description?: string | null;
+  sortOrder: number;
+  isDeleted?: boolean | null;
+}
+
+export interface AdminDefaultSprint {
+  id: string;
+  name: string;
+  weeks?: string | null;
+  focus?: string | null;
+  deliverables?: string | null; // newline-separated
+  sortOrder: number;
+  isDeleted?: boolean | null;
+}
+
+export interface AdminDefaultBoilerplate {
+  id: string;
+  key: string;
+  label: string;
+  value?: string | null;
+  isDeleted?: boolean | null;
+}
+
+export interface AdminAuditLogEntry {
+  id: string;
+  userEmail: string;
+  action: 'create' | 'update' | 'delete';
+  modelName: string;
+  recordId: string;
+  summary: string;
+  snapshotJson?: string | null;
+  timestamp: string;
+}
+
+// Known boilerplate keys (typed so we get autocomplete + spell-checking).
+// New keys can be added freely; this list isn't enforced server-side.
+export const BOILERPLATE_KEYS = {
+  CADENCE: 'cadence',
+  TIMELINE_SUMMARY: 'timeline.summary',
+  TENANT_STRATEGY_CUSTOMER: 'tenantStrategy.customer',
+  TENANT_STRATEGY_PLAINID: 'tenantStrategy.plainid',
+  TENANT_STRATEGY_OTHER: 'tenantStrategy.other',
+} as const;

@@ -23,6 +23,7 @@ import {
   listLibrary,
 } from '../lib/client';
 import { emptyPoc } from '../lib/seed-data';
+import { useDefaults, projectTracker } from '../lib/defaults-context';
 import { emptyTechnicalSpec } from '../lib/technical-spec';
 import { evaluateAll, overallCompleteness } from '../lib/completeness';
 import { downloadDocx, downloadHtml } from '../lib/docx-generator';
@@ -59,12 +60,21 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
 
   const isOwner = !!poc && poc.ownerEmail === currentUserEmail;
 
+  // Pull live admin defaults to seed new POCs. When admin tables are
+  // empty (first run after deploy), emptyPoc falls back to the hardcoded
+  // seeds in seed-data.ts.
+  const defaults = useDefaults();
+
   // Load POC
   useEffect(() => {
     (async () => {
       try {
         if (isNew) {
-          setPoc(emptyPoc(currentUserEmail));
+          setPoc(
+            emptyPoc(currentUserEmail, {
+              tracker: projectTracker(defaults.tracker),
+            }),
+          );
         } else if (id) {
           const data = await getPoc(id);
           if (!data) {
@@ -77,7 +87,11 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         setError(e?.message ?? String(e));
       }
     })();
-  }, [id, isNew, currentUserEmail]);
+    // Re-running this when defaults change isn't important — by the time
+    // the editor is mounted, defaults are loaded. We do depend on
+    // defaults.loaded so the very first new-POC after a fresh page load
+    // waits for defaults to finish loading.
+  }, [id, isNew, currentUserEmail, defaults.loaded, defaults.tracker]);
 
   // Load library (for picker)
   useEffect(() => {

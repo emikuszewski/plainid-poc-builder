@@ -7,6 +7,8 @@ import { PocList } from './components/PocList';
 import { PocEditor } from './components/PocEditor';
 import { PocPreview } from './components/PocPreview';
 import { UseCaseLibrary } from './components/UseCaseLibrary';
+import { AdminPage } from './components/AdminPage';
+import { DefaultsProvider } from './lib/defaults-context';
 import { listLibrary, createLibraryEntry } from './lib/client';
 import { SEED_USE_CASES } from './lib/seed-data';
 import { useTheme } from './lib/theme';
@@ -55,16 +57,20 @@ function useLibraryBootstrap(authenticated: boolean) {
 function AppRoutes({ user }: { user: { email: string } }) {
   useLibraryBootstrap(true);
   return (
-    <Layout user={user}>
-      <Routes>
-        <Route path="/" element={<PocList currentUserEmail={user.email} />} />
-        <Route path="/poc/new" element={<PocEditor currentUserEmail={user.email} />} />
-        <Route path="/poc/:id" element={<PocEditor currentUserEmail={user.email} />} />
-        <Route path="/poc/:id/preview" element={<PocPreview />} />
-        <Route path="/library" element={<UseCaseLibrary currentUserEmail={user.email} />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+    <DefaultsProvider>
+      <Layout user={user}>
+        <Routes>
+          <Route path="/" element={<PocList currentUserEmail={user.email} />} />
+          <Route path="/poc/new" element={<PocEditor currentUserEmail={user.email} />} />
+          <Route path="/poc/:id" element={<PocEditor currentUserEmail={user.email} />} />
+          <Route path="/poc/:id/preview" element={<PocPreview />} />
+          <Route path="/library" element={<UseCaseLibrary />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin/:tab" element={<AdminPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </DefaultsProvider>
   );
 }
 
@@ -86,7 +92,7 @@ export default function App() {
                     color: 'var(--color-text-muted)',
                   }}
                 >
-                  POCKET — YOUR POC KIT
+                  PLAINID · POC BUILDER
                 </div>
                 <div
                   style={{
