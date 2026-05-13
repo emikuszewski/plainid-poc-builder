@@ -20,6 +20,14 @@ const NOTICE_BODY =
 interface AiButtonProps {
   onRun: () => void | Promise<void>;
   loading?: boolean;
+  /**
+   * Optional completion state for one-shot AI features that finish asynchronously
+   * (e.g. Review POC). When `complete` is true, a ✓ replaces the ✨ icon. When
+   * `error` is true, a ! replaces it. The label stays the same so the button
+   * remains discoverable.
+   */
+  complete?: boolean;
+  error?: boolean;
   label?: string; // defaults to "Suggest"
   size?: 'sm' | 'md';
   className?: string;
@@ -30,6 +38,8 @@ interface AiButtonProps {
 export function AiButton({
   onRun,
   loading,
+  complete,
+  error,
   label = 'Suggest',
   size = 'sm',
   className,
@@ -80,7 +90,15 @@ export function AiButton({
         >
           {loading ? (
             <span className="inline-flex items-center gap-1.5">
-              <Spinner /> Generating…
+              <Spinner /> {label}…
+            </span>
+          ) : complete ? (
+            <span className="inline-flex items-center gap-1.5 text-[var(--color-accent)]">
+              <Checkmark /> {label}
+            </span>
+          ) : error ? (
+            <span className="inline-flex items-center gap-1.5 text-[var(--color-danger)]">
+              <AlertIcon /> {label}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1">
@@ -168,6 +186,42 @@ function Spinner() {
     >
       <circle cx="8" cy="8" r="6" strokeOpacity="0.25" />
       <path d="M8 2a6 6 0 0 1 6 6" />
+    </svg>
+  );
+}
+
+function Checkmark() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 8.5l3.5 3.5L13 5" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M8 2v6M8 12v.5" />
     </svg>
   );
 }

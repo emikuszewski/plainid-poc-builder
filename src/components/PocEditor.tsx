@@ -28,7 +28,8 @@ import { downloadDocx, downloadHtml } from '../lib/docx-generator';
 import { renderHtml } from '../lib/html-generator';
 import { SECTIONS } from '../types';
 import type { PocDocument, UseCaseLibraryEntry, UseCaseCategory } from '../types';
-import { generate } from '../lib/ai';
+import { generate, startAiJob } from '../lib/ai';
+import { client } from '../lib/client';
 import { buildReviewPocPrompt, parseReview, type ReviewResult } from '../lib/ai-prompts';
 
 const uid = () =>
@@ -200,10 +201,34 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
   }
 
   // ---- AI: Review POC ----
+  // Job-based: the Review feature uses the async startAiJob path so it
+  // can take as long as it needs. We track "the latest review job for
+  // this POC" and poll it while status is 'pending'.
+  //
+  // Status mapping (used by the icon):
+  //   null              → idle  (no job ever run, or job aged out)
+  //   'pending'         → running (spinner)
+  //   'complete'        → ✓ checkmark icon, modal shows parsed review
+  //   'error'           → ! exclamation icon, modal shows error + Re-run
+  //
+  // Re-running creates a new AiJob row, displacing the previous one in
+  // the "latest" lookup.
+  interface ReviewJob {
+    id: string;
+    status: 'pending' | 'complete' | 'error';
+    result: string | null;
+    errorMessage: string | null;
+    completedAt: string | null;
+    createdAt: string;
+  }
+  const [reviewJob, setReviewJob] = useState<ReviewJob | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
-  const [review, setReview] = useState<ReviewResult | null>(null);
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewStarting, setReviewStarting] = useState(false);
+
+  // Polling: while reviewJob.status === 'pending', re-fetch the AiJob row
+  // every 3 seconds until it flips to complete or error. The interval is
+  // cleared on unmount, on POC switch, or when the status settles.
+  const pollTimerRef = useRef<number | null>(null);
 
   // ---- Open Items modal — opened from either the "N OPEN" badge or the
   // "+ N more" tail of the sidebar blockers preview.
@@ -226,38 +251,159 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
     setFirstIncompleteId(firstWithIssues?.id ?? null);
   }, [poc]);
 
-  async function runReview() {
-    if (!poc) return;
-    setReviewing(true);
-    setReviewError(null);
-    setReview(null);
+  // Load the latest review job for this POC on mount (so a previously
+  // completed review still shows ✓ + opens with its cached result).
+  // Also load on POC switch.
+  useEffect(() => {
+    if (!poc?.id) return;
+    const pocId = poc.id;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, errors } = await client.models.AiJob.list({
+          filter: {
+            pocId: { eq: pocId },
+            feature: { eq: 'review-poc' },
+            ownerEmail: { eq: currentUserEmail },
+          },
+        });
+        if (cancelled) return;
+        if (errors && errors.length > 0) {
+          console.warn('AiJob list returned errors', errors);
+          return;
+        }
+        if (!data || data.length === 0) {
+          setReviewJob(null);
+          return;
+        }
+        // Sort newest first by createdAt and pick the latest.
+        const sorted = [...data].sort((a, b) =>
+          (b.createdAt ?? '').localeCompare(a.createdAt ?? ''),
+        );
+        const latest = sorted[0];
+        if (!latest) return;
+        setReviewJob({
+          id: latest.id,
+          status: (latest.status as ReviewJob['status']) ?? 'pending',
+          result: latest.result ?? null,
+          errorMessage: latest.errorMessage ?? null,
+          completedAt: latest.completedAt ?? null,
+          createdAt: latest.createdAt ?? new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Could not load latest AiJob for POC', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [poc?.id]);
+
+  // Polling effect — runs while the current job is pending.
+  useEffect(() => {
+    // Cleanup any prior timer first.
+    if (pollTimerRef.current !== null) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    if (!reviewJob || reviewJob.status !== 'pending') return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const { data } = await client.models.AiJob.get({ id: reviewJob.id });
+        if (cancelled || !data) return;
+        const next: ReviewJob = {
+          id: data.id,
+          status: (data.status as ReviewJob['status']) ?? 'pending',
+          result: data.result ?? null,
+          errorMessage: data.errorMessage ?? null,
+          completedAt: data.completedAt ?? null,
+          createdAt: data.createdAt ?? reviewJob.createdAt,
+        };
+        setReviewJob(next);
+        if (next.status === 'pending') {
+          pollTimerRef.current = window.setTimeout(tick, 3000);
+        }
+      } catch (err) {
+        console.warn('AiJob poll failed', err);
+        if (!cancelled) {
+          // Try again — transient network errors shouldn't kill polling.
+          pollTimerRef.current = window.setTimeout(tick, 5000);
+        }
+      }
+    };
+    pollTimerRef.current = window.setTimeout(tick, 3000);
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current !== null) {
+        window.clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [reviewJob?.id, reviewJob?.status]);
+
+  // Parsed review (derived from the latest complete job's result string).
+  // Recomputed when reviewJob changes — cheap relative to render cost.
+  const parsedReview: ReviewResult | null =
+    reviewJob?.status === 'complete' && reviewJob.result
+      ? parseReview(reviewJob.result)
+      : null;
+
+  async function startReview() {
+    if (!poc?.id) return;
+    setReviewStarting(true);
     try {
       const built = buildReviewPocPrompt(poc);
-      const result = await generate({
+      const jobId = await startAiJob({
+        feature: 'review-poc',
+        pocId: poc.id,
         prompt: built.prompt,
         system: built.system,
         maxTokens: built.maxTokens,
         modelId: built.modelId,
-        feature: 'review-poc',
-        pocId: poc.id,
       });
-      const parsed = parseReview(result.text);
-      if (!parsed) {
-        setReviewError('AI returned a response in an unexpected format. Please try again.');
-      } else {
-        setReview(parsed);
-      }
+      // Optimistic: set the new job to pending immediately so the icon
+      // shows the spinner. The polling effect picks it up.
+      setReviewJob({
+        id: jobId,
+        status: 'pending',
+        result: null,
+        errorMessage: null,
+        completedAt: null,
+        createdAt: new Date().toISOString(),
+      });
     } catch (err: any) {
-      setReviewError(err?.message ?? 'Review failed');
+      console.error('Failed to start review', err);
+      // Surface as an error-state job so the user can see what happened.
+      setReviewJob({
+        id: 'error-' + Date.now(),
+        status: 'error',
+        result: null,
+        errorMessage: err?.message ?? 'Failed to start review',
+        completedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
     } finally {
-      setReviewing(false);
+      setReviewStarting(false);
     }
   }
 
   function openReview() {
     setReviewModalOpen(true);
-    void runReview();
+    // If there's no job yet, or the previous one errored, kick a new one.
+    // If a job is pending or complete, just open the modal and show state.
+    if (!reviewJob || reviewJob.status === 'error') {
+      void startReview();
+    }
   }
+
+  // Derived UI state for the AiButton in the toolbar.
+  const reviewIconState = {
+    loading: reviewJob?.status === 'pending' || reviewStarting,
+    complete: reviewJob?.status === 'complete',
+    error: reviewJob?.status === 'error',
+  };
 
   function insertSelectedFromLibrary() {
     if (!poc || pickerSelection.length === 0) return;
@@ -450,8 +596,18 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
             <AiButton
               label="Review"
               onRun={openReview}
-              loading={reviewing}
-              title="Run an AI quality review of this POC document"
+              loading={reviewIconState.loading}
+              complete={reviewIconState.complete}
+              error={reviewIconState.error}
+              title={
+                reviewIconState.loading
+                  ? 'AI review running in the background — click to view progress'
+                  : reviewIconState.complete
+                  ? 'AI review complete — click to view results'
+                  : reviewIconState.error
+                  ? 'AI review failed — click to see details and retry'
+                  : 'Run an AI quality review of this POC document'
+              }
             />
             <Button size="sm" variant="ghost" onClick={exportHtml}>
               HTML
@@ -602,11 +758,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
       {/* AI: Review POC modal */}
       <Modal
         open={reviewModalOpen}
-        onClose={() => {
-          setReviewModalOpen(false);
-          setReview(null);
-          setReviewError(null);
-        }}
+        onClose={() => setReviewModalOpen(false)}
         title="POC Review"
         width={760}
       >
@@ -615,7 +767,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
           prompts for your own judgment — the SE owns the document.
         </p>
 
-        {reviewing && (
+        {reviewJob?.status === 'pending' && (
           <div className="flex items-center justify-center gap-2.5 py-10 text-[12.5px] text-[var(--color-text-muted)]">
             <svg
               width="14"
@@ -631,37 +783,58 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
               <circle cx="8" cy="8" r="6" strokeOpacity="0.25" />
               <path d="M8 2a6 6 0 0 1 6 6" />
             </svg>
-            <span>Reviewing…</span>
+            <span>
+              Reviewing in the background. You can close this modal and come back — the
+              icon up top will turn green when results are ready.
+            </span>
           </div>
         )}
 
-        {reviewError && !reviewing && (
+        {reviewJob?.status === 'error' && (
           <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 mb-4">
-            <p className="text-[12px] text-[var(--color-danger)]">{reviewError}</p>
-            <Button size="sm" variant="ghost" onClick={runReview} className="mt-2">
+            <p className="text-[12px] text-[var(--color-danger)]">
+              {reviewJob.errorMessage ?? 'Review failed'}
+            </p>
+            <Button size="sm" variant="ghost" onClick={() => void startReview()} className="mt-2">
               Try again
             </Button>
           </div>
         )}
 
-        {!reviewing && review && (
+        {reviewJob?.status === 'complete' && !parsedReview && (
+          <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 mb-4">
+            <p className="text-[12px] text-[var(--color-danger)]">
+              AI returned a response in an unexpected format. Please try again.
+            </p>
+            <Button size="sm" variant="ghost" onClick={() => void startReview()} className="mt-2">
+              Re-run
+            </Button>
+          </div>
+        )}
+
+        {parsedReview && (
           <div className="space-y-5">
-            <div>
-              <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-1.5">
+            <div className="flex items-baseline gap-2">
+              <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)]">
                 SUMMARY
               </div>
-              <p className="text-[13px] text-[var(--color-text)] leading-relaxed">
-                {review.summary}
-              </p>
+              {reviewJob?.completedAt && (
+                <div className="text-[10px] text-[var(--color-text-dim)] ml-auto mono tracking-wider">
+                  {formatRelativeTime(reviewJob.completedAt)}
+                </div>
+              )}
             </div>
+            <p className="text-[13px] text-[var(--color-text)] leading-relaxed -mt-3">
+              {parsedReview.summary}
+            </p>
 
-            {review.issues.length > 0 && (
+            {parsedReview.issues.length > 0 && (
               <div>
                 <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-2">
-                  ISSUES · {review.issues.length}
+                  ISSUES · {parsedReview.issues.length}
                 </div>
                 <div className="space-y-2">
-                  {review.issues.map((issue, i) => {
+                  {parsedReview.issues.map((issue, i) => {
                     const tone =
                       issue.severity === 'critical'
                         ? 'danger'
@@ -694,13 +867,13 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
               </div>
             )}
 
-            {review.strengths.length > 0 && (
+            {parsedReview.strengths.length > 0 && (
               <div>
                 <div className="mono text-[10px] tracking-widest text-[var(--color-text-dim)] mb-2">
-                  STRENGTHS · {review.strengths.length}
+                  STRENGTHS · {parsedReview.strengths.length}
                 </div>
                 <ul className="space-y-1">
-                  {review.strengths.map((s, i) => (
+                  {parsedReview.strengths.map((s, i) => (
                     <li
                       key={i}
                       className="text-[12.5px] text-[var(--color-text-muted)] leading-relaxed flex gap-2"
@@ -716,16 +889,14 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         )}
 
         <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-[var(--color-border)]">
-          <Button variant="ghost" onClick={runReview} disabled={reviewing}>
-            Re-run
-          </Button>
           <Button
             variant="ghost"
-            onClick={() => {
-              setReviewModalOpen(false);
-              setReview(null);
-            }}
+            onClick={() => void startReview()}
+            disabled={reviewJob?.status === 'pending' || reviewStarting}
           >
+            Re-run
+          </Button>
+          <Button variant="ghost" onClick={() => setReviewModalOpen(false)}>
             Close
           </Button>
         </div>
@@ -836,4 +1007,24 @@ function SaveIndicator({ state, readOnly }: { state: SaveState; readOnly: boolea
       {label}
     </span>
   );
+}
+
+/**
+ * Short human-readable "time ago" formatter for AiJob completion timestamps.
+ * Examples: "just now", "5m ago", "2h ago", "3d ago", "Mar 4".
+ */
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const diffMs = Date.now() - then;
+  const diffSec = Math.round(diffMs / 1000);
+  if (diffSec < 30) return 'just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }

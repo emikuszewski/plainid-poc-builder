@@ -186,3 +186,42 @@ export function onAiNoticeChanged(handler: () => void): () => void {
     window.removeEventListener('storage', storageHandler);
   };
 }
+
+// ============================================================
+// Async AI job — Review POC and any future long-running features
+// ============================================================
+
+export interface StartAiJobOptions {
+  feature: AiFeature;
+  pocId: string;
+  prompt: string;
+  system?: string;
+  maxTokens?: number;
+  modelId?: string;
+}
+
+/**
+ * Start a background AI job. Returns the new job id immediately;
+ * the Lambda runs the actual work in a separate invocation and writes
+ * the result back to the AiJob row. Client should poll AiJob.get(id)
+ * (see useAiJobPolling hook in PocEditor) until status flips.
+ */
+export async function startAiJob(opts: StartAiJobOptions): Promise<string> {
+  const response = await client.mutations.startAiJob({
+    feature: opts.feature,
+    pocId: opts.pocId,
+    prompt: opts.prompt,
+    system: opts.system,
+    maxTokens: opts.maxTokens ?? 2500,
+    modelId: opts.modelId,
+  });
+  const errors = (response as any).errors;
+  if (errors && errors.length > 0) {
+    throw new Error(errors[0]?.message ?? 'startAiJob failed');
+  }
+  const id = (response as any).data as string | null;
+  if (!id) {
+    throw new Error('startAiJob returned no job id');
+  }
+  return id;
+}

@@ -307,17 +307,20 @@ Return STRICT JSON in this shape, no preamble, no Markdown fences:
 
 Order issues by severity (critical first). Aim for 4–10 issues total — not a checklist, only real problems. If something is genuinely good, mention it under strengths.`;
 
-  // Review uses Claude Haiku 4.5 instead of Sonnet to fit comfortably
-  // under AppSync's 30s synchronous-resolver timeout. Haiku generates
-  // ~3-5x faster than Sonnet on this workload; a typical review now
-  // returns in 5-8s instead of 22-28s. The structured nature of the
-  // review (find specific failure modes, return JSON) is well-suited
-  // to Haiku — it loses some nuance vs Sonnet but reliably returns.
+  // Review uses Claude Opus 4.6, the most capable model for nuanced
+  // strategic judgment. Runs through the async-job pattern (startAiJob)
+  // rather than the synchronous aiGenerate path — so slow generation
+  // doesn't matter: the SE gets a spinner icon and the work runs in the
+  // background. When done, the icon flips to a green checkmark and the
+  // SE can click in to see results.
+  //
+  // We bump maxTokens to 2500 since we're not racing the AppSync timeout
+  // anymore — gives Opus room to be thorough on complex POCs.
   return {
     system: SE_SYSTEM,
     prompt,
-    maxTokens: 2000,
-    modelId: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+    maxTokens: 2500,
+    modelId: 'us.anthropic.claude-opus-4-6',
   };
 }
 

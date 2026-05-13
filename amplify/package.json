@@ -2,6 +2,9 @@
   "name": "amplify-backend",
   "type": "module",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.658.1"
+    "@aws-sdk/client-bedrock-runtime": "^3.658.1",
+    "@aws-sdk/client-dynamodb": "^3.658.1",
+    "@aws-sdk/client-lambda": "^3.658.1",
+    "@aws-sdk/lib-dynamodb": "^3.658.1"
   }
 }

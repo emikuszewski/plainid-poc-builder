@@ -1,13 +1,33 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import type { Schema } from '../../data/resource';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  UpdateCommand,
+  GetCommand,
+} from '@aws-sdk/lib-dynamodb';
+import { randomUUID } from 'node:crypto';
 
 /**
- * AppSync custom-mutation handler. Receives { prompt, system, maxTokens }
- * from the authenticated user, invokes Bedrock with the configured model,
- * returns the generated text.
+ * Multi-purpose AI Lambda.
  *
- * Errors are surfaced as thrown exceptions; AppSync turns these into
- * GraphQL errors the browser can render.
+ * Three event shapes this handler accepts:
+ *
+ * 1. AppSync — `aiGenerate` mutation (synchronous).
+ *    Caller awaits the Bedrock result. Used for short calls (Field Suggest,
+ *    Generate Use Cases) that comfortably fit under AppSync's 30s timeout.
+ *
+ * 2. AppSync — `startAiJob` mutation (job kickoff).
+ *    Writes a `pending` AiJob row, returns the job id immediately, then
+ *    self-invokes asynchronously to do the actual Bedrock work in the
+ *    background. Used for long-running calls like Review POC that exceed
+ *    the AppSync timeout.
+ *
+ * 3. Direct Lambda invocation — `{ mode: 'async-work', jobId }`.
+ *    The self-invocation path. Reads the AiJob row, runs Bedrock, writes
+ *    the result back. No caller is waiting; this can run for the full
+ *    Lambda timeout (35-60s).
  */
 
 const REGION = process.env.BEDROCK_REGION ?? 'us-east-1';
@@ -18,36 +38,46 @@ const DEFAULT_MODEL_ID =
 // this allowlist falls back to DEFAULT_MODEL_ID. Keeping an allowlist makes
 // the per-call model parameter safe (clients can't sneak in arbitrary
 // model IDs to inflate cost or hit unauthorized inference profiles).
+//
+// Opus 4.6 added for Review POC (Haiku 4.5 currently blocked by the
+// Bedrock-Marketplace gating in our account — Opus + Sonnet are not).
 const ALLOWED_MODEL_IDS = new Set<string>([
   'us.anthropic.claude-sonnet-4-6',
+  'us.anthropic.claude-opus-4-6',
   'us.anthropic.claude-haiku-4-5-20251001-v1:0',
 ]);
 
-// Cap output size as a safety belt — caller can request less but never more.
 const HARD_MAX_TOKENS = 4096;
 const DEFAULT_MAX_TOKENS = 1500;
 
+// AiJob model table name — injected at deploy time via backend.ts because
+// Amplify generates the actual physical table name.
+const AI_JOB_TABLE = process.env.AI_JOB_TABLE_NAME ?? '';
+
+// Self-Lambda function name — set by AWS automatically.
+const SELF_FUNCTION_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME ?? '';
+
 const bedrock = new BedrockRuntimeClient({ region: REGION });
+const lambda = new LambdaClient({ region: REGION });
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
 
-export const handler: Schema['aiGenerate']['functionHandler'] = async (event) => {
-  const args = event.arguments ?? {};
-  const prompt = (args.prompt ?? '').toString();
-  const system = (args.system ?? '').toString();
-  const requestedMax = Number(args.maxTokens ?? DEFAULT_MAX_TOKENS);
-  const maxTokens = Math.min(
-    Math.max(Number.isFinite(requestedMax) ? requestedMax : DEFAULT_MAX_TOKENS, 64),
-    HARD_MAX_TOKENS,
-  );
+// ============================================================
+// Bedrock invocation
+// ============================================================
 
-  // Pick the model — caller can request a specific allowed inference
-  // profile (e.g. Haiku for Review). Anything not on the allowlist falls
-  // back to the configured default.
-  const requestedModel = (args.modelId ?? '').toString().trim();
-  const modelId =
-    requestedModel && ALLOWED_MODEL_IDS.has(requestedModel)
-      ? requestedModel
-      : DEFAULT_MODEL_ID;
+interface BedrockResult {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  stopReason: string;
+}
 
+async function invokeBedrock(
+  prompt: string,
+  system: string,
+  maxTokens: number,
+  modelId: string,
+): Promise<BedrockResult> {
   if (!prompt.trim()) {
     throw new Error('prompt is required');
   }
@@ -70,7 +100,6 @@ export const handler: Schema['aiGenerate']['functionHandler'] = async (event) =>
   try {
     response = await bedrock.send(command);
   } catch (err: any) {
-    // Surface a clean error to the client without leaking infra details.
     console.error('Bedrock invoke failed', { error: err?.message });
     throw new Error(
       err?.name === 'AccessDeniedException'
@@ -81,7 +110,6 @@ export const handler: Schema['aiGenerate']['functionHandler'] = async (event) =>
     );
   }
 
-  // Bedrock returns the body as a Uint8Array — decode and parse.
   const decoded = new TextDecoder().decode(response.body);
   let parsed: any;
   try {
@@ -90,7 +118,6 @@ export const handler: Schema['aiGenerate']['functionHandler'] = async (event) =>
     throw new Error('AI service returned an unexpected response format.');
   }
 
-  // Anthropic's content array — concatenate any text blocks.
   const content: Array<{ type: string; text?: string }> = parsed?.content ?? [];
   const text = content
     .filter((b) => b.type === 'text' && typeof b.text === 'string')
@@ -108,4 +135,241 @@ export const handler: Schema['aiGenerate']['functionHandler'] = async (event) =>
     outputTokens: parsed?.usage?.output_tokens ?? 0,
     stopReason: parsed?.stop_reason ?? 'end_turn',
   };
+}
+
+function resolveModelId(requested: string | null | undefined): string {
+  const trimmed = (requested ?? '').toString().trim();
+  return trimmed && ALLOWED_MODEL_IDS.has(trimmed) ? trimmed : DEFAULT_MODEL_ID;
+}
+
+function resolveMaxTokens(requested: number | null | undefined): number {
+  const n = Number(requested ?? DEFAULT_MAX_TOKENS);
+  return Math.min(
+    Math.max(Number.isFinite(n) ? n : DEFAULT_MAX_TOKENS, 64),
+    HARD_MAX_TOKENS,
+  );
+}
+
+// ============================================================
+// Event routing
+// ============================================================
+
+export const handler = async (event: any): Promise<any> => {
+  // Direct invocation path — the async-work mode is for self-invocations
+  // dispatched from the startAiJob flow. No AppSync envelope present.
+  if (event?.mode === 'async-work' && event?.jobId) {
+    await runAsyncWork(event.jobId);
+    return { ok: true };
+  }
+
+  // AppSync custom-mutation envelope — dispatch by field name.
+  const fieldName = event?.info?.fieldName ?? '';
+  const args = event?.arguments ?? {};
+  const identity = event?.identity ?? {};
+  const ownerEmail =
+    (identity?.claims?.email as string) ||
+    (identity?.username as string) ||
+    'unknown';
+
+  if (fieldName === 'aiGenerate') {
+    return handleSyncGenerate(args);
+  }
+
+  if (fieldName === 'startAiJob') {
+    return handleStartAiJob(args, ownerEmail);
+  }
+
+  throw new Error(`Unrecognized invocation: fieldName=${fieldName}`);
 };
+
+// ============================================================
+// Sync aiGenerate (Field Suggest, Generate Use Cases)
+// ============================================================
+
+async function handleSyncGenerate(args: any): Promise<BedrockResult> {
+  const prompt = (args.prompt ?? '').toString();
+  const system = (args.system ?? '').toString();
+  const maxTokens = resolveMaxTokens(args.maxTokens);
+  const modelId = resolveModelId(args.modelId);
+  return invokeBedrock(prompt, system, maxTokens, modelId);
+}
+
+// ============================================================
+// Async startAiJob (Review POC and any future long-running feature)
+// ============================================================
+
+async function handleStartAiJob(args: any, ownerEmail: string): Promise<string> {
+  if (!AI_JOB_TABLE) {
+    throw new Error('AI_JOB_TABLE_NAME env var not configured');
+  }
+  if (!SELF_FUNCTION_NAME) {
+    throw new Error('AWS_LAMBDA_FUNCTION_NAME not available');
+  }
+
+  const feature = (args.feature ?? '').toString();
+  const pocId = (args.pocId ?? '').toString();
+  const prompt = (args.prompt ?? '').toString();
+  const system = (args.system ?? '').toString();
+  const maxTokens = resolveMaxTokens(args.maxTokens);
+  const modelId = resolveModelId(args.modelId);
+
+  if (!feature || !pocId || !prompt.trim()) {
+    throw new Error('feature, pocId, and prompt are required');
+  }
+
+  const jobId = randomUUID();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  // 30-day TTL in unix seconds
+  const ttl = Math.floor(now.getTime() / 1000) + 30 * 24 * 60 * 60;
+
+  // The promptJson stores the inputs the async worker will need to run
+  // Bedrock — keeps the worker stateless and lets us debug what was sent.
+  const promptJson = JSON.stringify({ prompt, system, maxTokens, modelId });
+
+  // Amplify-managed models use a few standard fields and a couple of
+  // bookkeeping fields (id, createdAt, updatedAt, owner). We write through
+  // the DynamoDB API directly because the Lambda can't easily call its
+  // own AppSync. The `owner` field is the AppSync owner-auth tag.
+  await ddb.send(
+    new PutCommand({
+      TableName: AI_JOB_TABLE,
+      Item: {
+        id: jobId,
+        ownerEmail,
+        feature,
+        pocId,
+        status: 'pending',
+        promptJson,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        ttl,
+        __typename: 'AiJob',
+      },
+    }),
+  );
+
+  // Kick off the worker — asynchronous invocation. The InvokeCommand with
+  // InvocationType 'Event' returns immediately; the worker runs separately.
+  try {
+    await lambda.send(
+      new InvokeCommand({
+        FunctionName: SELF_FUNCTION_NAME,
+        InvocationType: 'Event',
+        Payload: Buffer.from(JSON.stringify({ mode: 'async-work', jobId })),
+      }),
+    );
+  } catch (err: any) {
+    // If we can't start the worker, mark the row failed so the client
+    // doesn't poll forever.
+    console.error('Failed to launch async worker', err);
+    await markJobError(jobId, `Failed to start AI job: ${err?.message ?? err}`);
+    throw new Error('Failed to start AI job. Please try again.');
+  }
+
+  return jobId;
+}
+
+// ============================================================
+// Async worker — runs Bedrock, writes result back to the AiJob row.
+// ============================================================
+
+async function runAsyncWork(jobId: string): Promise<void> {
+  if (!AI_JOB_TABLE) {
+    console.error('AI_JOB_TABLE_NAME env var not configured');
+    return;
+  }
+
+  // Pull the job row to recover the inputs the original caller sent.
+  let job: any;
+  try {
+    const got = await ddb.send(
+      new GetCommand({
+        TableName: AI_JOB_TABLE,
+        Key: { id: jobId },
+      }),
+    );
+    job = got.Item;
+  } catch (err: any) {
+    console.error('Could not load AiJob row', { jobId, error: err?.message });
+    return;
+  }
+  if (!job) {
+    console.error('AiJob row not found', { jobId });
+    return;
+  }
+  if (job.status !== 'pending') {
+    console.log('AiJob already settled, skipping', { jobId, status: job.status });
+    return;
+  }
+
+  let inputs: { prompt: string; system: string; maxTokens: number; modelId: string };
+  try {
+    inputs = JSON.parse(job.promptJson);
+  } catch {
+    await markJobError(jobId, 'Saved job inputs were corrupt');
+    return;
+  }
+
+  try {
+    const result = await invokeBedrock(
+      inputs.prompt,
+      inputs.system,
+      inputs.maxTokens,
+      inputs.modelId,
+    );
+    await ddb.send(
+      new UpdateCommand({
+        TableName: AI_JOB_TABLE,
+        Key: { id: jobId },
+        UpdateExpression:
+          'SET #s = :s, #r = :r, #i = :i, #o = :o, #c = :c, #u = :u',
+        ExpressionAttributeNames: {
+          '#s': 'status',
+          '#r': 'result',
+          '#i': 'inputTokens',
+          '#o': 'outputTokens',
+          '#c': 'completedAt',
+          '#u': 'updatedAt',
+        },
+        ExpressionAttributeValues: {
+          ':s': 'complete',
+          ':r': result.text,
+          ':i': result.inputTokens,
+          ':o': result.outputTokens,
+          ':c': new Date().toISOString(),
+          ':u': new Date().toISOString(),
+        },
+      }),
+    );
+  } catch (err: any) {
+    console.error('AsyncWork Bedrock failed', { jobId, error: err?.message });
+    await markJobError(jobId, err?.message ?? 'AI generation failed');
+  }
+}
+
+async function markJobError(jobId: string, message: string): Promise<void> {
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: AI_JOB_TABLE,
+        Key: { id: jobId },
+        UpdateExpression: 'SET #s = :s, #e = :e, #c = :c, #u = :u',
+        ExpressionAttributeNames: {
+          '#s': 'status',
+          '#e': 'errorMessage',
+          '#c': 'completedAt',
+          '#u': 'updatedAt',
+        },
+        ExpressionAttributeValues: {
+          ':s': 'error',
+          ':e': message,
+          ':c': new Date().toISOString(),
+          ':u': new Date().toISOString(),
+        },
+      }),
+    );
+  } catch (err: any) {
+    console.error('Could not write error to AiJob row', { jobId, error: err?.message });
+  }
+}

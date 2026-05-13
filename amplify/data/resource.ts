@@ -141,6 +141,70 @@ const schema = a
       .returns(a.ref('AiGenerateResult'))
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(aiGenerate)),
+
+    /**
+     * Async AI job — used for long-running operations like Review POC that
+     * exceed AppSync's 30s synchronous resolver timeout.
+     *
+     * Lifecycle:
+     *   1. Client calls `startAiJob` → creates a row with status='pending',
+     *      returns jobId immediately. The Lambda is invoked asynchronously
+     *      to do the actual Bedrock work.
+     *   2. Client polls `AiJob` by id (or queries by pocId+feature for
+     *      "latest review") to see when status flips to 'complete' or 'error'.
+     *   3. On completion, the Lambda writes `result` (or `error`) and updates
+     *      status. Old rows have a 30-day TTL — see backend.ts.
+     *
+     * Per-POC, per-feature semantics: the client picks "the latest job for
+     * this POC + feature" to render icon state and result. Re-running creates
+     * a new row; the old one ages out via TTL.
+     */
+    AiJob: a
+      .model({
+        ownerEmail: a.string().required(),
+        feature: a.string().required(), // 'review-poc' (extensible to others later)
+        pocId: a.string().required(),
+        status: a.string().required(), // 'pending' | 'complete' | 'error'
+        // Snapshot of inputs so the Lambda can run async without the client
+        // staying connected. JSON-stringified to avoid schema explosion.
+        promptJson: a.string().required(),
+        // Filled in by the Lambda when the job completes.
+        result: a.string(),
+        errorMessage: a.string(),
+        inputTokens: a.integer(),
+        outputTokens: a.integer(),
+        createdAt: a.string().required(), // ISO timestamp
+        completedAt: a.string(),
+        // DynamoDB TTL — unix epoch seconds. Set 30 days out at create time.
+        ttl: a.integer(),
+      })
+      .authorization((allow) => [
+        // Read-only for any authenticated user — clients filter by
+        // ownerEmail to find their own jobs. The Lambda writes rows
+        // directly through DynamoDB (not AppSync), so AppSync write
+        // auth doesn't apply to job creation. Updates also happen via
+        // direct DynamoDB writes from the Lambda.
+        allow.authenticated().to(['read']),
+      ]),
+
+    /**
+     * Start an async AI job. Returns the jobId immediately; the actual
+     * Bedrock work happens in a separate Lambda invocation that writes
+     * the result back to the AiJob row when done.
+     */
+    startAiJob: a
+      .mutation()
+      .arguments({
+        feature: a.string().required(),
+        pocId: a.string().required(),
+        prompt: a.string().required(),
+        system: a.string(),
+        maxTokens: a.integer(),
+        modelId: a.string(),
+      })
+      .returns(a.string()) // returns the new AiJob id
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(aiGenerate)),
   })
   .authorization((allow) => [allow.resource(aiGenerate)]);
 
