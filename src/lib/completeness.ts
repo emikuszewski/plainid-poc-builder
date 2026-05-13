@@ -58,6 +58,8 @@ export function evaluateSection(poc: PocDocument, sectionId: string): SectionSta
     case 'framework':
       check(has(poc.cadence), 'Cadence not described');
       check(poc.personas.length > 0, 'No personas defined');
+      break;
+    case 'team':
       check(poc.teamMembers.length > 1, 'Team members not populated');
       check(
         poc.teamMembers.some((m) => /customer|client|prospect/i.test(m.org) || (!/plainid/i.test(m.org) && has(m.org))),
