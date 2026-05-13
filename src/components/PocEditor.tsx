@@ -8,6 +8,7 @@ import {
   ObjectivesSection,
   DiscoverySection,
   TimelineSection,
+  TeamSection,
   FrameworkSection,
   UseCasesSection,
   DependenciesSection,
@@ -655,6 +656,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
             />
             <TechnicalSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
             <TimelineSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
+            <TeamSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
             <FrameworkSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
             <DependenciesSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />
             <TrackerSection poc={poc} set={patch} firstIncompleteId={firstIncompleteId} />

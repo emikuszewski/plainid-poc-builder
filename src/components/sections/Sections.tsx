@@ -934,11 +934,9 @@ export function TimelineSection({ poc, set, firstIncompleteId }: SectionProps) {
 // ============================================================
 export function FrameworkSection({ poc, set, firstIncompleteId }: SectionProps) {
   const personaFocusRef = useFocusOnAppend(poc.personas.length);
-  const memberFocusRef = useFocusOnAppend(poc.teamMembers.length);
 
   // Collapsible card state.
   const personasExpanded = useExpandedSet(poc.personas.map((p) => p.id));
-  const membersExpanded = useExpandedSet(poc.teamMembers.map((m) => m.id));
   const addPersona = () =>
     set({ personas: [...poc.personas, { id: uid(), name: '', description: '' }] });
   const updatePersona = (id: string, patch: Partial<Persona>) =>
@@ -946,46 +944,12 @@ export function FrameworkSection({ poc, set, firstIncompleteId }: SectionProps) 
   const removePersona = (id: string) =>
     set({ personas: poc.personas.filter((p) => p.id !== id) });
 
-  // PlainID team picker state.
-  const [plainidPickerOpen, setPlainidPickerOpen] = useState(false);
-
-  const addMember = (org: string) =>
-    set({
-      teamMembers: [
-        ...poc.teamMembers,
-        { id: uid(), org, name: '', role: '', email: '', catalogId: null },
-      ],
-    });
-
-  const addMemberFromCatalog = (entry: PlainIdTeamCatalogEntry) => {
-    set({
-      teamMembers: [
-        ...poc.teamMembers,
-        {
-          id: uid(),
-          org: 'PlainID',
-          name: entry.name,
-          role: entry.defaultRole,
-          email: entry.email,
-          catalogId: entry.id,
-        },
-      ],
-    });
-  };
-
-  const updateMember = (id: string, patch: Partial<TeamMember>) =>
-    set({
-      teamMembers: poc.teamMembers.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-    });
-  const removeMember = (id: string) =>
-    set({ teamMembers: poc.teamMembers.filter((m) => m.id !== id) });
-
   return (
     <SectionCard
       id="framework"
-      number="08"
+      number="09"
       title="Framework"
-      description="Cadence, personas, and the named humans on both sides of the engagement."
+      description="Cadence and the test personas used during validation."
       status={status(poc, 'framework')}
       summary={summarizeSection(poc, 'framework')}
       defaultOpen={firstIncompleteId === 'framework'}
@@ -1064,7 +1028,63 @@ export function FrameworkSection({ poc, set, firstIncompleteId }: SectionProps) 
           );
         })}
       </div>
+    </SectionCard>
+  );
+}
 
+// ============================================================
+// 08 — Team
+//
+// Pulled out of Framework so it stands as its own top-level
+// section. Houses both customer-side team members and the
+// PlainID team picker.
+// ============================================================
+export function TeamSection({ poc, set, firstIncompleteId }: SectionProps) {
+  const memberFocusRef = useFocusOnAppend(poc.teamMembers.length);
+  const membersExpanded = useExpandedSet(poc.teamMembers.map((m) => m.id));
+  const [plainidPickerOpen, setPlainidPickerOpen] = useState(false);
+
+  const addMember = (org: string) =>
+    set({
+      teamMembers: [
+        ...poc.teamMembers,
+        { id: uid(), org, name: '', role: '', email: '', catalogId: null },
+      ],
+    });
+
+  const addMemberFromCatalog = (entry: PlainIdTeamCatalogEntry) => {
+    set({
+      teamMembers: [
+        ...poc.teamMembers,
+        {
+          id: uid(),
+          org: 'PlainID',
+          name: entry.name,
+          role: entry.defaultRole,
+          email: entry.email,
+          catalogId: entry.id,
+        },
+      ],
+    });
+  };
+
+  const updateMember = (id: string, patch: Partial<TeamMember>) =>
+    set({
+      teamMembers: poc.teamMembers.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    });
+  const removeMember = (id: string) =>
+    set({ teamMembers: poc.teamMembers.filter((m) => m.id !== id) });
+
+  return (
+    <SectionCard
+      id="team"
+      number="08"
+      title="Team"
+      description="The named humans on both sides of the engagement — customer stakeholders plus the assigned PlainID team."
+      status={status(poc, 'team')}
+      summary={summarizeSection(poc, 'team')}
+      defaultOpen={firstIncompleteId === 'team'}
+    >
       <div className="flex items-center justify-between mb-2">
         <label>POC team members</label>
         <div className="flex gap-2">
@@ -1676,7 +1696,7 @@ export function DependenciesSection({ poc, set, firstIncompleteId }: SectionProp
   return (
     <SectionCard
       id="dependencies"
-      number="09"
+      number="10"
       title="Dependencies & Pre-Requisites"
       description="Who's responsible for what, and what's still open."
       status={status(poc, 'dependencies')}
@@ -1774,7 +1794,7 @@ export function TrackerSection({ poc, set, firstIncompleteId }: SectionProps) {
   return (
     <SectionCard
       id="tracker"
-      number="10"
+      number="11"
       title="POC Tracker"
       description="Phased task list. Pre-populated from the standard PlainID engagement template — edit as needed."
       status={status(poc, 'tracker')}
@@ -1977,7 +1997,7 @@ export function DocsSection({ poc, set, firstIncompleteId }: SectionProps) {
   return (
     <SectionCard
       id="docs"
-      number="11"
+      number="12"
       title="Reference Documentation"
       description="Public PlainID docs to share with the customer. Defaults are seeded — add or remove as needed."
       status={status(poc, 'docs')}

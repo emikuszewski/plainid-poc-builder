@@ -77,11 +77,23 @@ export function summarizeSection(poc: PocDocument, sectionId: string): string {
       ]);
     }
 
+    case 'team': {
+      const memberN = poc.teamMembers.length;
+      if (memberN === 0) return '';
+      const plainidN = poc.teamMembers.filter((m) => m.org === 'PlainID').length;
+      const customerN = memberN - plainidN;
+      return joinDot([
+        memberN ? `${memberN} member${memberN === 1 ? '' : 's'}` : null,
+        customerN ? `${customerN} customer` : null,
+        plainidN ? `${plainidN} PlainID` : null,
+      ]);
+    }
+
     case 'framework': {
       const personaN = poc.personas.length;
-      const memberN = poc.teamMembers.length;
+      const hasCadence = poc.cadence && poc.cadence.trim().length > 0;
       return joinDot([
-        memberN ? `${memberN} team member${memberN === 1 ? '' : 's'}` : null,
+        hasCadence ? 'cadence set' : null,
         personaN ? `${personaN} persona${personaN === 1 ? '' : 's'}` : null,
       ]);
     }

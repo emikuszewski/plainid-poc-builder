@@ -323,10 +323,11 @@ export const SECTIONS: SectionMeta[] = [
   { id: 'usecases', label: 'Use Cases', shortLabel: '05' },
   { id: 'technical', label: 'Technical Foundation', shortLabel: '06' },
   { id: 'timeline', label: 'Timeline', shortLabel: '07' },
-  { id: 'framework', label: 'Framework', shortLabel: '08' },
-  { id: 'dependencies', label: 'Dependencies', shortLabel: '09' },
-  { id: 'tracker', label: 'Tracker', shortLabel: '10' },
-  { id: 'docs', label: 'Reference Docs', shortLabel: '11' },
+  { id: 'team', label: 'Team', shortLabel: '08' },
+  { id: 'framework', label: 'Framework', shortLabel: '09' },
+  { id: 'dependencies', label: 'Dependencies', shortLabel: '10' },
+  { id: 'tracker', label: 'Tracker', shortLabel: '11' },
+  { id: 'docs', label: 'Reference Docs', shortLabel: '12' },
 ];
 
 // ============================================================
