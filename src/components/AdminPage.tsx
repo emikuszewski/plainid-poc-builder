@@ -6,6 +6,7 @@ import {
   createTrackerTask,
   updateTrackerTask,
   deleteTrackerTask,
+  resetTrackerToDefaults,
   listAuditLog,
 } from '../lib/admin-defaults';
 import type { AdminDefaultTrackerTask, AdminAuditLogEntry } from '../types';
@@ -249,12 +250,41 @@ function TrackerTab() {
   // phase by creating a task and entering a new phase name.
   const phases = Array.from(byPhase.keys());
 
+  const handleReset = async () => {
+    if (
+      !confirm(
+        'Reset the tracker defaults to the built-in factory list?\n\n' +
+          'All current tracker tasks will be soft-deleted and the catalog ' +
+          'will be restored from the original seed data. Existing POCs ' +
+          'are not affected — only new POCs created after this point ' +
+          'will see the restored defaults.',
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await resetTrackerToDefaults();
+      await refresh('tracker');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
-        {tracker.length} task{tracker.length === 1 ? '' : 's'} across {phases.length} phase
-        {phases.length === 1 ? '' : 's'}. Status starts at "Not Started" by default; SEs
-        update task status on each POC's Tracker section as work progresses.
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {tracker.length} task{tracker.length === 1 ? '' : 's'} across {phases.length} phase
+          {phases.length === 1 ? '' : 's'}. Status starts at "Not Started" by default; SEs
+          update task status on each POC's Tracker section as work progresses.
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
       </div>
 
       {error && (

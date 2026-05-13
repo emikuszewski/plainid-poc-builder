@@ -165,6 +165,37 @@ export async function deleteTrackerTask(id: string): Promise<void> {
   });
 }
 
+/**
+ * Reset the tracker default catalog to factory state by soft-deleting all
+ * live rows, then running bootstrap which will re-seed from DEFAULT_TRACKER.
+ * The audit log records a single high-level RESET entry rather than one
+ * delete per task to keep the activity feed clean.
+ */
+export async function resetTrackerToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data: existing } = await c.models.AdminDefaultTrackerTask.list();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const live = ((existing ?? []) as any[]).filter((r) => !r.isDeleted);
+  for (const row of live) {
+    try {
+      await c.models.AdminDefaultTrackerTask.update({ id: row.id, isDeleted: true });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('reset: failed to soft-delete row', row.id, err);
+    }
+  }
+  // Now run the bootstrap; with no live rows it will re-seed from defaults.
+  await bootstrapAdminDefaults();
+  // Single audit entry summarizing the reset.
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultTrackerTask',
+    recordId: 'reset',
+    summary: `Reset tracker defaults — restored ${DEFAULT_TRACKER.length} factory tasks`,
+  });
+}
+
 // ============================================================
 // Responsibilities (customer + plainid)
 // ============================================================
@@ -279,7 +310,7 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
   // --- Tracker tasks ---
   try {
     const { data: existing } = await c.models.AdminDefaultTrackerTask.list();
-    if ((existing ?? []).length === 0) {
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
       for (let i = 0; i < DEFAULT_TRACKER.length; i++) {
         const t = DEFAULT_TRACKER[i];
         try {
@@ -325,7 +356,7 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
   ];
   try {
     const { data: existing } = await c.models.AdminDefaultResponsibility.list();
-    if ((existing ?? []).length === 0) {
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
       let order = 0;
       for (const text of DEFAULT_CUSTOMER_RESPONSIBILITIES) {
         try {
@@ -365,7 +396,7 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
   // --- Personas ---
   try {
     const { data: existing } = await c.models.AdminDefaultPersona.list();
-    if ((existing ?? []).length === 0) {
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
       for (let i = 0; i < DEFAULT_PERSONAS.length; i++) {
         const p = DEFAULT_PERSONAS[i];
         try {
@@ -390,7 +421,7 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
   // --- Reference docs ---
   try {
     const { data: existing } = await c.models.AdminDefaultReferenceDoc.list();
-    if ((existing ?? []).length === 0) {
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
       for (let i = 0; i < DEFAULT_REFERENCE_DOCS.length; i++) {
         const d = DEFAULT_REFERENCE_DOCS[i];
         try {
@@ -418,7 +449,7 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
   // type in PocDocument uses `phase`. Map phase → name on seed.
   try {
     const { data: existing } = await c.models.AdminDefaultSprint.list();
-    if ((existing ?? []).length === 0) {
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
       for (let i = 0; i < DEFAULT_SPRINTS.length; i++) {
         const s = DEFAULT_SPRINTS[i];
         try {
@@ -454,7 +485,7 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
 
   try {
     const { data: existing } = await c.models.AdminDefaultBoilerplate.list();
-    if ((existing ?? []).length === 0) {
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
       try {
         await c.models.AdminDefaultBoilerplate.create({
           key: 'cadence',
