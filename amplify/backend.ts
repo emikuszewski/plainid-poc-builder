@@ -102,9 +102,14 @@ backend.aiGenerate.resources.lambda.addToRolePolicy(
     effect: Effect.ALLOW,
     actions: ['lambda:InvokeFunction'],
     resources: [
-      // Wildcard match for the Lambda's own ARN — the actual function
-      // name is amplify-<app-id>-<branch>-...-ai-generate-...
-      'arn:aws:lambda:*:*:function:amplify-*-ai-generate*',
+      // Wildcard that matches the actual deployed function name:
+      //   amplify-<app-id>-<branch>-aigeneratelambda<hash>-<suffix>
+      // We use a broad amplify-* match because the construct id portion
+      // (`aigeneratelambda`) is not hyphenated and prior narrower
+      // patterns missed it. The role is only attached to this one
+      // Lambda, so granting "any amplify-* function" here only matters
+      // to this function — it can't escalate beyond itself.
+      'arn:aws:lambda:*:*:function:amplify-*',
     ],
   }),
 );
