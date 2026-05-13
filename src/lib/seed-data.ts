@@ -392,13 +392,41 @@ export const DEFAULT_REFERENCE_DOCS: Omit<ReferenceDoc, 'id'>[] = [
 // Empty POC factory
 // ============================================================
 
+// ============================================================
+// Tenant strategy default paragraphs
+//
+// Each choice ships with a standard paragraph the SE can edit. The text
+// captures the access reality (who has tenant access, who drives sessions)
+// so the deliverable accurately reflects how the engagement runs.
+// `{customer}` is interpolated at selection time, not at every render.
+// ============================================================
+
+export type TenantStrategyChoice = 'customer' | 'plainid' | 'other' | '';
+
+export function tenantStrategyDefault(
+  choice: TenantStrategyChoice,
+  customerName: string,
+): string {
+  const customer = customerName.trim() || 'the customer';
+  switch (choice) {
+    case 'customer':
+      return `The POC will run in ${customer}'s PlainID tenant. ${customer} owns and operates the tenant; PlainID does not have direct access. Working sessions in the tenant will be driven by a ${customer} representative, with PlainID providing real-time guidance and validation.`;
+    case 'plainid':
+      return `PlainID will provision a dedicated tenant for the ${customer} POC engagement. PlainID retains administrative access to support configuration and troubleshooting between sessions. ${customer} will be granted appropriate roles to participate in policy authoring, testing, and review.`;
+    case 'other':
+    case '':
+    default:
+      return '';
+  }
+}
+
 /**
  * Build a fresh empty POC. When `catalogs` is provided (the live admin
  * defaults from DefaultsContext), tracker / personas / sprints / refDocs
  * come from there; otherwise the hardcoded seeds in this file are used.
  *
- * Currently only `tracker` is wired through (Bundle 1). The other catalogs
- * still seed from constants here until their admin tabs ship.
+ * Currently only `tracker` is wired through (admin Bundle 1). The other
+ * catalogs still seed from constants here until their admin tabs ship.
  */
 export function emptyPoc(
   ownerEmail: string,
@@ -419,9 +447,12 @@ export function emptyPoc(
     whatToValidate: '',
     postPocDeliverables:
       'Total Cost of Ownership (TCO) model — including Authorizer licensing, implementation, and ongoing support\nInfrastructure requirements — cluster specs, networking, what the customer must provision\nImplementation plan — phased rollout aligned to customer timelines\nSkill set requirements for customer teams to operate and maintain the solution\nGap analysis — items requiring product roadmap alignment',
+    tenantStrategyChoice: '',
+    tenantStrategy: '',
     inScopeSystems: [],
     identitySources: [],
     architectureConstraints: '',
+    outOfScope: '',
     timelineSummary:
       'Scoped for a minimum of 6 weeks to allow sufficient time for environment setup, use-case sprint execution, testing, and knowledge transfer. Structured as 2-week sprints aligned to use-case clusters.',
     sprints: DEFAULT_SPRINTS.map((s) => ({ ...s, id: uid() })),
@@ -430,8 +461,10 @@ export function emptyPoc(
     personas: DEFAULT_PERSONAS.map((p) => ({ ...p, id: uid() })),
     teamMembers: [],
     useCases: [],
-    customerResponsibilities: '',
-    plainidResponsibilities: '',
+    customerResponsibilities:
+      'Provision Kubernetes cluster (or namespace) for PlainID component deployment\nProvide network connectivity to data sources, identity stores, and downstream systems\nIdentify a network/infrastructure contact for connectivity setup and troubleshooting\nProvision test user accounts representing each persona, with documented attribute values\nProvide sample JWTs / token introspection for the primary IdP\nGrant POC team access to the customer POC environment\nReview success criteria with stakeholders prior to kickoff',
+    plainidResponsibilities:
+      'Provision PlainID SaaS tenant (PAP) scoped for the POC\nProvide Helm charts and deployment documentation for PDP/PAA components\nLead authorizer configuration, integration testing, and policy authoring\nDeliver weekly status reports against use case success criteria\nProvide Solutions Engineering support throughout the engagement\nDocument findings, gaps, and post-POC recommendations',
     openItems: '',
     tracker: catalogs?.tracker ?? DEFAULT_TRACKER.map((t) => ({ ...t, id: uid() })),
     referenceDocs: DEFAULT_REFERENCE_DOCS.map((d) => ({ ...d, id: uid() })),

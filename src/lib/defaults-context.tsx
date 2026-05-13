@@ -176,12 +176,15 @@ export function projectSprints(admin: AdminDefaultSprint[]): Sprint[] {
   if (admin.length === 0) {
     return DEFAULT_SPRINTS.map((s) => ({ ...s, id: uid() }));
   }
+  // The Sprint shape in PocDocument is { id, phase, weeks, focus }. The
+  // admin row's `name` field maps to `phase` (it's the human label for
+  // the sprint slot). `deliverables` exists on the admin row for future
+  // use but isn't part of the POC sprint shape yet.
   return admin.map((s) => ({
     id: uid(),
-    name: s.name,
+    phase: s.name,
     weeks: s.weeks ?? '',
     focus: s.focus ?? '',
-    deliverables: s.deliverables ?? '',
   }));
 }
 
