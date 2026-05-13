@@ -74,33 +74,38 @@ backend.aiGenerate.resources.lambda.addToRolePolicy(
  *
  *   1. The Lambda must be able to invoke itself with InvocationType=Event
  *      so the startAiJob mutation can kick off background work and return
- *      the job id immediately.
+ *      the job id immediately. We grant against a WILDCARD ARN pattern
+ *      rather than `lambda.functionArn` — a hard reference to the
+ *      Lambda's own ARN inside its own role's policy creates a
+ *      CloudFormation circular dependency (Lambda needs its role
+ *      attached; role needs the policy; policy needs the Lambda ARN).
  *
  *   2. The Lambda needs DynamoDB Get/Put/Update on the AiJob table.
- *      We grant against a WILDCARD ARN pattern (`table/AiJob-*`) rather
- *      than the specific table ARN so the Lambda's IAM role doesn't
- *      depend on the AiJob CDK construct. Hard-referencing the AiJob
- *      table ARN creates a circular dependency inside the data stack:
- *      Lambda → role policy → table → AppSync function-directive →
- *      Lambda. The wildcard breaks the cycle. Only one AiJob-* table
- *      exists per environment, so the wildcard isn't a meaningful
- *      security loosening.
+ *      We grant against a WILDCARD ARN pattern (`table/AiJob-*`) for
+ *      the same reason — hard-referencing the AiJob table ARN created
+ *      a similar cycle when the Lambda lives in the data stack.
  *
  *   3. We deliberately do NOT inject `AI_JOB_TABLE_NAME` as a Lambda
- *      env var here — that would create the same kind of cycle. Instead
- *      the Lambda discovers the table name at runtime by listing tables
+ *      env var here — that would create the same kind of cycle. The
+ *      Lambda discovers the table name at runtime by listing tables
  *      and finding the one prefixed `AiJob-` (cached after first call).
  *
- * The AiJob table itself is referenced only via `backend.data.resources.tables`
- * for the TTL override below; that doesn't create a Lambda dependency.
+ * Only the TTL configuration on the AiJob table is now done manually
+ * (see comment below) — we avoid any reference to the AiJob CDK
+ * construct from this file because such references create implicit
+ * dependency edges that conflict with the Lambda being an AppSync
+ * resolver in the same stack.
  */
-const aiJobTable = backend.data.resources.tables['AiJob'];
 
 backend.aiGenerate.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ['lambda:InvokeFunction'],
-    resources: [backend.aiGenerate.resources.lambda.functionArn],
+    resources: [
+      // Wildcard match for the Lambda's own ARN — the actual function
+      // name is amplify-<app-id>-<branch>-...-ai-generate-...
+      'arn:aws:lambda:*:*:function:amplify-*-ai-generate*',
+    ],
   }),
 );
 
@@ -111,25 +116,30 @@ backend.aiGenerate.resources.lambda.addToRolePolicy(
       'dynamodb:PutItem',
       'dynamodb:GetItem',
       'dynamodb:UpdateItem',
-      'dynamodb:ListTables',
     ],
-    resources: [
-      'arn:aws:dynamodb:*:*:table/AiJob-*',
-      // ListTables operates on the service, not a resource
-      '*',
-    ],
+    resources: ['arn:aws:dynamodb:*:*:table/AiJob-*'],
+  }),
+);
+
+backend.aiGenerate.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ['dynamodb:ListTables'],
+    // ListTables operates on the service, not a specific resource
+    resources: ['*'],
   }),
 );
 
 /**
- * Enable DynamoDB TTL on the AiJob table — old job rows auto-delete
- * after 30 days. The Lambda sets the `ttl` attribute to (now + 30d) at
- * row creation time; DynamoDB sweeps it.
+ * Note on DynamoDB TTL: we previously enabled TTL on the AiJob table
+ * via a CDK property override here. That created a circular dependency
+ * because the override pulled `backend.data.resources.tables['AiJob']`
+ * into this file, and any reference to the AiJob CDK construct creates
+ * an implicit edge in the dependency graph that conflicts with the
+ * Lambda being a data resolver.
+ *
+ * Workaround: enable TTL manually in the AWS console (DynamoDB → AiJob
+ * table → Additional settings → TTL → Enable, attribute name `ttl`).
+ * The Lambda already sets `ttl` to unix-seconds 30d out at row create
+ * time, so once TTL is enabled in the console, sweeping just works.
  */
-const cfnAiJobTable = aiJobTable.node.defaultChild as any;
-if (cfnAiJobTable) {
-  cfnAiJobTable.addPropertyOverride('TimeToLiveSpecification', {
-    AttributeName: 'ttl',
-    Enabled: true,
-  });
-}
