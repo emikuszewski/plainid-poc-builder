@@ -725,10 +725,9 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
         </div>
       </div>
 
-      {/* Mirror right-rail spacer — same width as the left sidebar. Keeps
-          the centered editor pane visually balanced on wide screens. Hides
-          below the lg breakpoint to match the sidebar's own behavior. */}
-      <div aria-hidden className="hidden lg:block w-[260px] flex-shrink-0" />
+      {/* Right-rail spacer removed — toolbar now stretches to the page edge.
+          Form body still centers at 920px via its inner wrapper, so the
+          editing experience stays readable while the chrome runs full width. */}
 
       {/* Library picker modal — multi-select */}
       <Modal
