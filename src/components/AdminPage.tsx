@@ -33,6 +33,10 @@ import {
   updateAdminIdentityProvider,
   deleteAdminIdentityProvider,
   resetIdentityProvidersToDefaults,
+  createAdminPlainIdTeamMember,
+  updateAdminPlainIdTeamMember,
+  deleteAdminPlainIdTeamMember,
+  resetPlainIdTeamToDefaults,
   listAuditLog,
 } from '../lib/admin-defaults';
 import type {
@@ -44,6 +48,7 @@ import type {
   AdminDefaultBoilerplate,
   AdminDefaultSystemCatalogEntry,
   AdminDefaultIdentityProviderEntry,
+  AdminDefaultPlainIdTeamMember,
   AdminAuditLogEntry,
 } from '../types';
 
@@ -72,6 +77,7 @@ const TABS = [
   { id: 'sprints', label: 'Sprints', shortLabel: 'SPR' },
   { id: 'systems', label: 'In-scope Systems', shortLabel: 'SYS' },
   { id: 'idps', label: 'Identity Providers', shortLabel: 'IDP' },
+  { id: 'plainidteam', label: 'PlainID Team', shortLabel: 'PID' },
   { id: 'boilerplate', label: 'Boilerplate', shortLabel: 'COP' },
 ] as const;
 
@@ -121,6 +127,7 @@ export function AdminPage() {
       {activeTab === 'sprints' && <SprintsTab />}
       {activeTab === 'systems' && <SystemCatalogTab />}
       {activeTab === 'idps' && <IdentityProvidersTab />}
+      {activeTab === 'plainidteam' && <PlainIdTeamTab />}
       {activeTab === 'boilerplate' && <BoilerplateTab />}
     </div>
   );
@@ -2139,5 +2146,230 @@ function IdentityProviderEditor({
         )}
       </div>
     </Modal>
+  );
+}
+
+// ============================================================
+// PlainID Team tab — list of named PlainID team members that
+// appear in the "+ PlainID (pick)" picker on the Team section.
+// Same list pattern as Personas.
+// ============================================================
+
+function PlainIdTeamTab() {
+  const { plainidTeam, refresh, loaded } = useDefaults();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleCreate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const maxOrder = plainidTeam.length
+        ? Math.max(...plainidTeam.map((m) => m.sortOrder ?? 0))
+        : 0;
+      const created = await createAdminPlainIdTeamMember({
+        name: 'New team member',
+        email: '',
+        defaultRole: 'Solutions Engineer',
+        sortOrder: maxOrder + 10,
+      });
+      await refresh('plainidTeam');
+      setEditingId(created.id);
+    } catch (err: any) {
+      setError(err?.message ?? 'Create failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdate = async (
+    id: string,
+    patch: Partial<Omit<AdminDefaultPlainIdTeamMember, 'id' | 'isDeleted'>>,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateAdminPlainIdTeamMember(id, patch);
+      await refresh('plainidTeam');
+    } catch (err: any) {
+      setError(err?.message ?? 'Update failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove "${name}" from the PlainID team catalog?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAdminPlainIdTeamMember(id);
+      await refresh('plainidTeam');
+    } catch (err: any) {
+      setError(err?.message ?? 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Reset PlainID team defaults to the factory list?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await resetPlainIdTeamToDefaults();
+      await refresh('plainidTeam');
+    } catch (err: any) {
+      setError(err?.message ?? 'Reset failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!loaded) return <div className="text-[12.5px] text-[var(--color-text-muted)]">Loading…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-3">
+        <div className="text-[12px] text-[var(--color-text-muted)] leading-relaxed flex-1">
+          {plainidTeam.length} team member{plainidTeam.length === 1 ? '' : 's'}. The Team
+          section's "+ PlainID (pick)" picker reads from this catalog. Default role
+          pre-fills the row when picked — SEs can adjust per engagement (e.g. add
+          "— POC Lead").
+        </div>
+        <Button size="sm" onClick={() => void handleCreate()} disabled={busy}>
+          + Member
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => void handleReset()} disabled={busy}>
+          Reset to factory defaults
+        </Button>
+      </div>
+
+      {error && (
+        <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden divide-y divide-[var(--color-border)]">
+        {plainidTeam.map((row) => (
+          <PlainIdTeamRow
+            key={row.id}
+            row={row}
+            editing={editingId === row.id}
+            busy={busy}
+            onStartEdit={() => setEditingId(row.id)}
+            onCancelEdit={() => setEditingId(null)}
+            onSave={async (patch) => {
+              await handleUpdate(row.id, patch);
+              setEditingId(null);
+            }}
+            onDelete={() => void handleDelete(row.id, row.name)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlainIdTeamRow({
+  row,
+  editing,
+  busy,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}: {
+  row: AdminDefaultPlainIdTeamMember;
+  editing: boolean;
+  busy: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: (patch: Partial<Omit<AdminDefaultPlainIdTeamMember, 'id' | 'isDeleted'>>) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(row.name);
+  const [email, setEmail] = useState(row.email);
+  const [defaultRole, setDefaultRole] = useState(row.defaultRole);
+  useEffect(() => {
+    if (!editing) {
+      setName(row.name);
+      setEmail(row.email);
+      setDefaultRole(row.defaultRole);
+    }
+  }, [row, editing]);
+
+  if (editing) {
+    return (
+      <div className="px-4 py-3 bg-[var(--color-bg)]">
+        <div className="grid grid-cols-12 gap-2">
+          <div className="col-span-6">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </div>
+          <div className="col-span-6">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@plainid.com"
+            />
+          </div>
+          <div className="col-span-12">
+            <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Default role</label>
+            <input
+              value={defaultRole}
+              onChange={(e) => setDefaultRole(e.target.value)}
+              placeholder="e.g. Solutions Engineer"
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() =>
+              void onSave({
+                name: name.trim(),
+                email: email.trim(),
+                defaultRole: defaultRole.trim(),
+              })
+            }
+            disabled={busy || !name.trim() || !email.trim() || !defaultRole.trim()}
+          >
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onCancelEdit} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto text-[var(--color-danger)]"
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex items-baseline gap-3 px-4 py-2 hover:bg-[var(--color-bg-hover)] cursor-pointer"
+      onClick={onStartEdit}
+      role="button"
+    >
+      <span className="text-[12.5px] font-medium">{row.name}</span>
+      <span className="text-[11.5px] text-[var(--color-text-muted)]">{row.defaultRole}</span>
+      <span className="mono text-[10.5px] text-[var(--color-text-dim)] tracking-wider ml-auto">
+        {row.email}
+      </span>
+    </div>
   );
 }

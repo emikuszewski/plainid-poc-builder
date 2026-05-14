@@ -9,6 +9,7 @@ import type {
   AdminDefaultBoilerplate,
   AdminDefaultSystemCatalogEntry,
   AdminDefaultIdentityProviderEntry,
+  AdminDefaultPlainIdTeamMember,
   AdminAuditLogEntry,
 } from '../types';
 
@@ -560,7 +561,7 @@ import {
   DEFAULT_SPRINTS,
   DEFAULT_REFERENCE_DOCS,
 } from './seed-data';
-import { SYSTEM_CATALOG, IDENTITY_PROVIDER_CATALOG } from '../types';
+import { SYSTEM_CATALOG, IDENTITY_PROVIDER_CATALOG, PLAINID_TEAM_CATALOG } from '../types';
 
 interface BootstrapResult {
   trackerSeeded: number;
@@ -571,6 +572,7 @@ interface BootstrapResult {
   boilerplateSeeded: number;
   systemCatalogSeeded: number;
   identityProvidersSeeded: number;
+  plainidTeamSeeded: number;
 }
 
 /**
@@ -594,6 +596,7 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
     boilerplateSeeded: 0,
     systemCatalogSeeded: 0,
     identityProvidersSeeded: 0,
+    plainidTeamSeeded: 0,
   };
 
   // --- Tracker tasks ---
@@ -870,6 +873,32 @@ export async function bootstrapAdminDefaults(): Promise<BootstrapResult> {
     console.warn('bootstrap identity provider list failed', err);
   }
 
+  // --- PlainID team members ---
+  try {
+    const { data: existing } = await c.models.AdminDefaultPlainIdTeamMember.list();
+    if (((existing ?? []) as Array<{ isDeleted?: boolean | null }>).filter((r) => !r.isDeleted).length === 0) {
+      for (let i = 0; i < PLAINID_TEAM_CATALOG.length; i++) {
+        const m = PLAINID_TEAM_CATALOG[i];
+        try {
+          await c.models.AdminDefaultPlainIdTeamMember.create({
+            name: m.name,
+            email: m.email,
+            defaultRole: m.defaultRole,
+            sortOrder: (i + 1) * 10,
+            isDeleted: false,
+          });
+          result.plainidTeamSeeded++;
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('bootstrap plainid team seed failed for', m.name, err);
+        }
+      }
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('bootstrap plainid team list failed', err);
+  }
+
   return result;
 }
 
@@ -1138,5 +1167,85 @@ export async function resetIdentityProvidersToDefaults(): Promise<void> {
     modelName: 'AdminDefaultIdentityProviderEntry',
     recordId: 'reset',
     summary: `Reset identity provider defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
+  });
+}
+
+// ============================================================
+// PlainID team members
+// ============================================================
+
+export async function listAdminPlainIdTeam(): Promise<AdminDefaultPlainIdTeamMember[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultPlainIdTeamMember.list();
+  if (errors?.length) throw new Error(errors[0]?.message ?? 'list failed');
+  return liveAndSorted<AdminDefaultPlainIdTeamMember>(data ?? []);
+}
+
+export async function createAdminPlainIdTeamMember(
+  input: Omit<AdminDefaultPlainIdTeamMember, 'id' | 'isDeleted'>,
+): Promise<AdminDefaultPlainIdTeamMember> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultPlainIdTeamMember.create({
+    ...input,
+    isDeleted: false,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'create failed');
+  await writeAudit({
+    action: 'create',
+    modelName: 'AdminDefaultPlainIdTeamMember',
+    recordId: data.id,
+    summary: `Added PlainID team member "${input.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultPlainIdTeamMember;
+}
+
+export async function updateAdminPlainIdTeamMember(
+  id: string,
+  patch: Partial<Omit<AdminDefaultPlainIdTeamMember, 'id' | 'isDeleted'>>,
+): Promise<AdminDefaultPlainIdTeamMember> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultPlainIdTeamMember.update({ id, ...patch });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'update failed');
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultPlainIdTeamMember',
+    recordId: id,
+    summary: `Updated PlainID team member "${data.name}"`,
+    snapshot: data,
+  });
+  return data as AdminDefaultPlainIdTeamMember;
+}
+
+export async function deleteAdminPlainIdTeamMember(id: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const { data, errors } = await c.models.AdminDefaultPlainIdTeamMember.update({
+    id,
+    isDeleted: true,
+  });
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'delete failed');
+  await writeAudit({
+    action: 'delete',
+    modelName: 'AdminDefaultPlainIdTeamMember',
+    recordId: id,
+    summary: `Removed PlainID team member "${data.name}"`,
+    snapshot: data,
+  });
+}
+
+export async function resetPlainIdTeamToDefaults(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = client;
+  const removed = await softDeleteAllLive(c.models.AdminDefaultPlainIdTeamMember);
+  await bootstrapAdminDefaults();
+  await writeAudit({
+    action: 'update',
+    modelName: 'AdminDefaultPlainIdTeamMember',
+    recordId: 'reset',
+    summary: `Reset PlainID team defaults — replaced ${removed} row${removed === 1 ? '' : 's'}`,
   });
 }

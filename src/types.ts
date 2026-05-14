@@ -1213,3 +1213,12 @@ export interface AdminDefaultIdentityProviderEntry {
   sortOrder: number;
   isDeleted?: boolean | null;
 }
+
+export interface AdminDefaultPlainIdTeamMember {
+  id: string;
+  name: string;
+  email: string;
+  defaultRole: string;
+  sortOrder: number;
+  isDeleted?: boolean | null;
+}

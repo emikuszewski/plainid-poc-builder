@@ -327,6 +327,22 @@ const schema = a
       .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
 
     /**
+     * PlainID team member catalog. Each entry is a named PlainIDer who can
+     * be added to a POC via the Team section's "+ PlainID (pick)" picker.
+     * Editable from the Admin → PlainID Team tab. Email is the lookup
+     * key in practice (one row per person).
+     */
+    AdminDefaultPlainIdTeamMember: a
+      .model({
+        name: a.string().required(),
+        email: a.string().required(),
+        defaultRole: a.string().required(),
+        sortOrder: a.integer().required(),
+        isDeleted: a.boolean(),
+      })
+      .authorization((allow) => [allow.authenticated().to(['create', 'read', 'update', 'delete'])]),
+
+    /**
      * Append-only audit log for all admin-defaults writes. Every create /
      * update / delete on an Admin* model writes one row here. Powers the
      * Admin → Activity tab. Authorization is broad (anyone can read +

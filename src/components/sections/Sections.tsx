@@ -17,9 +17,6 @@ import type {
   PlainIdTeamCatalogEntry,
 } from '../../types';
 import {
-  PLAINID_TEAM_CATALOG,
-} from '../../types';
-import {
   Field,
   Button,
   SectionCard,
@@ -42,6 +39,7 @@ import {
   projectTenantStrategyTemplates,
   projectSystemCatalog,
   projectIdentityProviders,
+  projectPlainIdTeam,
 } from '../../lib/defaults-context';
 
 const uid = () =>
@@ -1059,6 +1057,12 @@ export function TeamSection({ poc, set, firstIncompleteId }: SectionProps) {
   const membersExpanded = useExpandedSet(poc.teamMembers.map((m) => m.id));
   const [plainidPickerOpen, setPlainidPickerOpen] = useState(false);
 
+  // PlainID team catalog flows through DefaultsContext so it stays editable
+  // from the Admin → PlainID Team tab. Falls back to the hardcoded baseline
+  // when the admin table is empty.
+  const defaults = useDefaults();
+  const plainIdTeamCatalog = projectPlainIdTeam(defaults.plainidTeam);
+
   const addMember = (org: string) =>
     set({
       teamMembers: [
@@ -1210,7 +1214,7 @@ export function TeamSection({ poc, set, firstIncompleteId }: SectionProps) {
           add "— POC Lead" to the title).
         </p>
         <div className="space-y-1.5">
-          {PLAINID_TEAM_CATALOG.map((e) => {
+          {plainIdTeamCatalog.map((e) => {
             const alreadyAdded = poc.teamMembers.some((m) => m.catalogId === e.id);
             return (
               <button

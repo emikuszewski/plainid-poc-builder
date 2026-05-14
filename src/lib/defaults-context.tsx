@@ -8,6 +8,7 @@ import {
   listAdminBoilerplate,
   listAdminSystemCatalog,
   listAdminIdentityProviders,
+  listAdminPlainIdTeam,
   bootstrapAdminDefaults,
 } from './admin-defaults';
 import {
@@ -19,6 +20,7 @@ import {
 import {
   SYSTEM_CATALOG,
   IDENTITY_PROVIDER_CATALOG,
+  PLAINID_TEAM_CATALOG,
 } from '../types';
 import type {
   AdminDefaultTrackerTask,
@@ -29,12 +31,14 @@ import type {
   AdminDefaultBoilerplate,
   AdminDefaultSystemCatalogEntry,
   AdminDefaultIdentityProviderEntry,
+  AdminDefaultPlainIdTeamMember,
   TrackerRow,
   Persona,
   Sprint,
   ReferenceDoc,
   SystemCatalogEntry,
   IdentityProviderCatalogEntry,
+  PlainIdTeamCatalogEntry,
   UseCaseCategory,
   IdpProviderType,
 } from '../types';
@@ -60,6 +64,7 @@ export interface DefaultsState {
   boilerplate: AdminDefaultBoilerplate[];
   systemCatalog: AdminDefaultSystemCatalogEntry[];
   identityProviders: AdminDefaultIdentityProviderEntry[];
+  plainidTeam: AdminDefaultPlainIdTeamMember[];
   loaded: boolean;
   refresh: (key?: keyof DefaultsCatalogs) => Promise<void>;
 }
@@ -74,6 +79,7 @@ export interface DefaultsCatalogs {
   boilerplate: AdminDefaultBoilerplate[];
   systemCatalog: AdminDefaultSystemCatalogEntry[];
   identityProviders: AdminDefaultIdentityProviderEntry[];
+  plainidTeam: AdminDefaultPlainIdTeamMember[];
 }
 
 const initialState: DefaultsCatalogs = {
@@ -85,6 +91,7 @@ const initialState: DefaultsCatalogs = {
   boilerplate: [],
   systemCatalog: [],
   identityProviders: [],
+  plainidTeam: [],
 };
 
 const DefaultsContext = createContext<DefaultsState>({
@@ -110,6 +117,7 @@ export function DefaultsProvider({ children }: { children: React.ReactNode }) {
             'boilerplate',
             'systemCatalog',
             'identityProviders',
+            'plainidTeam',
           ];
       const partial: Partial<DefaultsCatalogs> = {};
       await Promise.all(
@@ -138,6 +146,9 @@ export function DefaultsProvider({ children }: { children: React.ReactNode }) {
               break;
             case 'identityProviders':
               partial.identityProviders = await listAdminIdentityProviders();
+              break;
+            case 'plainidTeam':
+              partial.plainidTeam = await listAdminPlainIdTeam();
               break;
           }
         }),
@@ -327,5 +338,22 @@ export function projectIdentityProviders(
     providerType: e.providerType as IdpProviderType,
     defaultType: e.defaultType,
     defaultNotes: e.defaultNotes,
+  }));
+}
+
+/**
+ * Project the admin PlainID team catalog into the PlainIdTeamCatalogEntry
+ * shape the Team section's picker expects. Falls back to the hardcoded
+ * PLAINID_TEAM_CATALOG when the admin table is empty.
+ */
+export function projectPlainIdTeam(
+  admin: AdminDefaultPlainIdTeamMember[],
+): PlainIdTeamCatalogEntry[] {
+  if (admin.length === 0) return PLAINID_TEAM_CATALOG;
+  return admin.map((m) => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    defaultRole: m.defaultRole,
   }));
 }
