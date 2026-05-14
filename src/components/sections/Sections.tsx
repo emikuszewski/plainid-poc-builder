@@ -319,6 +319,37 @@ Role consolidation mechanics — how legacy roles map into policies`}
 // ============================================================
 // 04 — Discovery Summary
 // ============================================================
+
+/**
+ * EmphasisCard — a tinted wrapper that draws the eye to high-signal
+ * subsections inside Discovery (Tenant Strategy, In-scope Systems,
+ * Identity Providers). These three blocks drive contractual and
+ * architectural decisions, so they should stand out from the
+ * surrounding bullet-list fields.
+ *
+ * Visual treatment: 3px accent left border, tinted background, a small
+ * monospaced eyebrow label, and a thin bottom border. POC-editor only —
+ * the customer-facing HTML preview is unchanged.
+ */
+function EmphasisCard({
+  eyebrow,
+  children,
+}: {
+  eyebrow: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="mb-6 rounded-md border border-[var(--color-pill-accent-border)] bg-[var(--color-pill-accent-bg)] border-l-[3px] border-l-[var(--color-accent)] px-4 py-3"
+    >
+      <div className="mono text-[10px] tracking-widest text-[var(--color-accent)] mb-2 font-medium">
+        {eyebrow}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) {
   const archSuggest = useFieldSuggest('architectureConstraints', poc, set, poc.id);
   const [systemPickerOpen, setSystemPickerOpen] = useState(false);
@@ -419,7 +450,7 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
       summary={summarizeSection(poc, 'discovery')}
       defaultOpen={firstIncompleteId === 'discovery'}
     >
-      <div className="mb-4">
+      <EmphasisCard eyebrow="DECISION — TENANT STRATEGY">
         <label className="mb-1.5">Tenant strategy</label>
         <div className="flex flex-col gap-1.5 mb-2">
           {([
@@ -486,6 +517,28 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
             );
           })}
         </div>
+        {poc.tenantStrategyChoice === 'plainid' && (
+          <div className="mb-2 flex items-start gap-3 px-3 py-2.5 rounded-md border border-[var(--color-pill-accent-border)] bg-[var(--color-bg-elevated)]">
+            <span className="text-[14px] leading-none mt-0.5" aria-hidden>📋</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12.5px] font-medium text-[var(--color-text)]">
+                Tenant request form required
+              </div>
+              <div className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5 leading-snug">
+                PlainID-provisioned tenants are spun up via this internal request form.
+                Submit it to start the process — turnaround is typically a few business days.
+              </div>
+              <a
+                href="https://docs.google.com/forms/d/e/1FAIpQLSfncyH7xfSjCTgkm_q34yYTlivCY35AERdAYCtIqWcD58IioQ/viewform?gxids=7628"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-1.5 text-[12px] font-medium text-[var(--color-accent)] hover:underline"
+              >
+                Open request form →
+              </a>
+            </div>
+          </div>
+        )}
         {poc.tenantStrategyChoice && (
           <textarea
             rows={4}
@@ -498,9 +551,9 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
             }
           />
         )}
-      </div>
+      </EmphasisCard>
 
-      <div className="mb-6">
+      <EmphasisCard eyebrow="DECISION — IN-SCOPE SYSTEMS">
         <div className="flex items-center justify-between mb-2">
           <label>In-scope systems &amp; platforms</label>
           <div className="flex items-center gap-2">
@@ -593,9 +646,9 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
             );
           })}
         </div>
-      </div>
+      </EmphasisCard>
 
-      <div className="mb-6">
+      <EmphasisCard eyebrow="DECISION — IDENTITY PROVIDERS">
         <div className="flex items-center justify-between mb-2">
           <label>Identity Providers</label>
           <div className="flex items-center gap-2">
@@ -673,7 +726,7 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
             );
           })}
         </div>
-      </div>
+      </EmphasisCard>
 
       <Field
         label="Architecture constraints & design decisions"
