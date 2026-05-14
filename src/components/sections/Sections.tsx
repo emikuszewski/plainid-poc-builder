@@ -1386,6 +1386,13 @@ export function UseCasesSection({
   };
 
   // ---- AI: Generate use cases ----
+  // Mirrors the async pattern used by the Review POC button: clicking the
+  // toolbar button kicks generation in the background and the icon swaps
+  // to a spinner. Clicking again while pending is a no-op (the icon tells
+  // the user it's running). When generation completes, the icon goes ✓
+  // and the next click opens the modal with the candidates to pick. On
+  // error, the icon goes ! and click opens the modal showing the failure
+  // with a Re-run button.
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState<
@@ -1393,6 +1400,9 @@ export function UseCasesSection({
   >([]);
   const [generatedSelection, setGeneratedSelection] = useState<string[]>([]);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  // Tracks whether a completed batch is waiting in `generated` to be viewed.
+  // Cleared whenever the user opens the modal or kicks a new run.
+  const [generateUnseenComplete, setGenerateUnseenComplete] = useState(false);
 
   const isValidCategory = (c: string): UseCase['category'] => {
     const valid = [
@@ -1410,6 +1420,7 @@ export function UseCasesSection({
   const runGenerate = async () => {
     setGenerating(true);
     setGenerateError(null);
+    setGenerateUnseenComplete(false);
     try {
       const { buildGenerateUseCasesPrompt, parseGeneratedUseCases } = await import(
         '../../lib/ai-prompts'
@@ -1427,25 +1438,50 @@ export function UseCasesSection({
       if (parsed.length === 0) {
         setGenerateError('AI returned no usable use cases. Please try again.');
         setGenerated([]);
+        setGenerateUnseenComplete(true); // surface error via icon state
       } else {
         const withIds = parsed.map((p) => ({ tempId: uid(), ...p }));
         setGenerated(withIds);
         setGeneratedSelection(withIds.map((p) => p.tempId));
+        setGenerateUnseenComplete(true);
       }
     } catch (err: any) {
       setGenerateError(err?.message ?? 'AI generation failed');
       setGenerated([]);
+      setGenerateUnseenComplete(true);
     } finally {
       setGenerating(false);
     }
   };
 
-  const openGenerateModal = () => {
-    setGenerateModalOpen(true);
+  /**
+   * Toolbar button click. State machine:
+   *   - Pending  → no-op (icon already shows spinner)
+   *   - Idle, no prior result  → kick a run; do NOT open modal
+   *   - Has unseen result (complete or error)  → open modal to view it
+   *   - Has seen result  → kick a new run; do NOT open modal
+   */
+  const onGenerateClick = () => {
+    if (generating) return;
+    if (generateUnseenComplete) {
+      // User wants to view the result they were notified of by the icon.
+      setGenerateModalOpen(true);
+      setGenerateUnseenComplete(false);
+      return;
+    }
+    // Either first run, or user has already seen the previous result and
+    // wants to ask for new candidates.
     setGenerated([]);
     setGeneratedSelection([]);
     setGenerateError(null);
     void runGenerate();
+  };
+
+  // Icon state mirrors Review's pattern.
+  const generateIconState = {
+    loading: generating,
+    complete: generateUnseenComplete && !generateError && generated.length > 0,
+    error: generateUnseenComplete && !!generateError,
   };
 
   const toggleGeneratedSelection = (tempId: string) =>
@@ -1490,9 +1526,19 @@ export function UseCasesSection({
       <div className="flex items-center justify-end gap-2 mb-3">
         <AiButton
           label="Generate"
-          onRun={openGenerateModal}
-          loading={false}
-          title="Generate candidate use cases using AI based on the POC context"
+          onRun={onGenerateClick}
+          loading={generateIconState.loading}
+          complete={generateIconState.complete}
+          error={generateIconState.error}
+          title={
+            generateIconState.loading
+              ? 'Use case generation running in the background — icon will turn green when done'
+              : generateIconState.complete
+              ? 'Use case candidates ready — click to view results'
+              : generateIconState.error
+              ? 'Use case generation failed — click to see details and retry'
+              : 'Generate candidate use cases using AI based on the POC context'
+          }
         />
         <Button size="sm" onClick={onOpenLibraryPicker}>
           + From library
@@ -1674,7 +1720,15 @@ export function UseCasesSection({
         {generateError && !generating && (
           <div className="bg-[var(--color-pill-danger-bg)] border border-[var(--color-pill-danger-border)] rounded-md px-3 py-2 mb-4">
             <p className="text-[12px] text-[var(--color-danger)]">{generateError}</p>
-            <Button size="sm" variant="ghost" onClick={runGenerate} className="mt-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setGenerateModalOpen(false);
+                void runGenerate();
+              }}
+              className="mt-2"
+            >
               Try again
             </Button>
           </div>
@@ -1754,7 +1808,14 @@ export function UseCasesSection({
         )}
 
         <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-[var(--color-border)]">
-          <Button variant="ghost" onClick={runGenerate} disabled={generating}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setGenerateModalOpen(false);
+              void runGenerate();
+            }}
+            disabled={generating}
+          >
             Regenerate
           </Button>
           <div className="flex items-center gap-2">
