@@ -653,7 +653,7 @@ export function PocEditor({ currentUserEmail }: { currentUserEmail: string }) {
       <div className="flex-1 min-w-0">
         {/* Sticky toolbar */}
         <div className="sticky top-12 z-30 bg-[var(--color-bg)]/90 backdrop-blur-md border-b border-[var(--color-border)]">
-          <div className="max-w-[920px] mx-auto px-6 py-3 flex items-center gap-3">
+          <div className="px-6 py-3 flex items-center gap-3">
             <input
               className="!h-9 !text-[15px] !font-semibold flex-1 !bg-transparent !border-transparent hover:!border-[var(--color-border)] focus:!border-[var(--color-border-focus)] focus:!bg-[var(--color-bg-input)]"
               placeholder="Customer name…"
