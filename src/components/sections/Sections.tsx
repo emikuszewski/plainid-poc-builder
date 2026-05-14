@@ -512,33 +512,52 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
                   <div className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5">
                     {opt.caveat}
                   </div>
+                  {/* High-prominence callout: appears only inside the
+                      PlainID-provisioned radio when it's selected.
+                      Solid accent background + white text — meant to
+                      catch the SE's eye every time, not blend in. */}
+                  {opt.key === 'plainid' && selected && (
+                    <div
+                      className="mt-2.5 flex items-start gap-2.5 px-3 py-2.5 rounded-md"
+                      style={{
+                        backgroundColor: 'var(--color-accent)',
+                        color: '#ffffff',
+                      }}
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <span className="text-[15px] leading-none mt-0.5" aria-hidden>
+                        📋
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12.5px] font-semibold">
+                          Action required: submit the tenant request form
+                        </div>
+                        <div
+                          className="text-[11.5px] mt-0.5 leading-snug"
+                          style={{ color: 'rgba(255,255,255,0.85)' }}
+                        >
+                          PlainID-provisioned tenants are spun up via this internal
+                          request form. Submit it to start the process — turnaround is
+                          typically a few business days.
+                        </div>
+                        <a
+                          href="https://docs.google.com/forms/d/e/1FAIpQLSfncyH7xfSjCTgkm_q34yYTlivCY35AERdAYCtIqWcD58IioQ/viewform?gxids=7628"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-block mt-2 text-[12px] font-semibold underline"
+                          style={{ color: '#ffffff' }}
+                        >
+                          Open request form →
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </label>
             );
           })}
         </div>
-        {poc.tenantStrategyChoice === 'plainid' && (
-          <div className="mb-2 flex items-start gap-3 px-3 py-2.5 rounded-md border border-[var(--color-pill-accent-border)] bg-[var(--color-bg-elevated)]">
-            <span className="text-[14px] leading-none mt-0.5" aria-hidden>📋</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-[12.5px] font-medium text-[var(--color-text)]">
-                Tenant request form required
-              </div>
-              <div className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5 leading-snug">
-                PlainID-provisioned tenants are spun up via this internal request form.
-                Submit it to start the process — turnaround is typically a few business days.
-              </div>
-              <a
-                href="https://docs.google.com/forms/d/e/1FAIpQLSfncyH7xfSjCTgkm_q34yYTlivCY35AERdAYCtIqWcD58IioQ/viewform?gxids=7628"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-1.5 text-[12px] font-medium text-[var(--color-accent)] hover:underline"
-              >
-                Open request form →
-              </a>
-            </div>
-          </div>
-        )}
         {poc.tenantStrategyChoice && (
           <textarea
             rows={4}
