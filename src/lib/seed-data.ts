@@ -428,9 +428,9 @@ export function tenantStrategyDefault(
   // Hardcoded fallback
   switch (choice) {
     case 'customer':
-      return `The POC will run in ${customer}'s PlainID tenant. ${customer} owns and operates the tenant; PlainID does not have direct access. Working sessions in the tenant will be driven by a ${customer} representative, with PlainID providing real-time guidance and validation.`;
+      return `The POC will run in ${customer}'s existing PlainID tenant. ${customer} grants PlainID access to support configuration, troubleshooting, and async work between sessions. ${customer} retains ownership of the tenant; ${customer} stakeholders participate in policy authoring, testing, and review alongside the PlainID team.`;
     case 'plainid':
-      return `PlainID will provision a dedicated tenant for the ${customer} POC engagement. PlainID retains administrative access to support configuration and troubleshooting between sessions. ${customer} will be granted appropriate roles to participate in policy authoring, testing, and review.\n\nTo kick off tenant provisioning, submit the request form: https://docs.google.com/forms/d/e/1FAIpQLSfncyH7xfSjCTgkm_q34yYTlivCY35AERdAYCtIqWcD58IioQ/viewform?gxids=7628`;
+      return `PlainID will provision a dedicated tenant for the ${customer} POC engagement. ${customer} will operate the tenant directly; PlainID does not retain access. Working sessions are driven by a ${customer} representative, with PlainID providing real-time guidance and validation via screenshare.\n\nTo kick off tenant provisioning, submit the request form: https://docs.google.com/forms/d/e/1FAIpQLSfncyH7xfSjCTgkm_q34yYTlivCY35AERdAYCtIqWcD58IioQ/viewform?gxids=7628`;
     case 'other':
     case '':
     default:

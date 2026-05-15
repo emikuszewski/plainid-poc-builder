@@ -457,12 +457,12 @@ export function DiscoverySection({ poc, set, firstIncompleteId }: SectionProps) 
             {
               key: 'customer' as const,
               label: "Customer's existing PlainID tenant",
-              caveat: 'PlainID has no access — sessions are customer-driven via screenshare',
+              caveat: 'PlainID has full access — work proceeds asynchronously between sessions',
             },
             {
               key: 'plainid' as const,
               label: 'PlainID-provisioned tenant for the customer',
-              caveat: 'PlainID has access — work proceeds asynchronously between sessions',
+              caveat: 'PlainID has no access — sessions are customer-driven via screenshare',
             },
             {
               key: 'other' as const,
